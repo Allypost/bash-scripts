@@ -1,0 +1,70 @@
+#!/bin/bash
+
+clear_line() {
+    printf "\r\033[2K"
+}
+
+print_status() {
+    printf "\e[3;4m%s\e[0m\r" "$1"
+}
+
+print_status_report() {
+    clear_line
+    print_status "$1"
+    echo
+}
+
+prog() {
+    local w=80 p=$1
+    shift
+    # create a string of spaces, then change them to dots
+    printf -v dots "%*s" "$(( $p*$w/100 ))" ""; dots=${dots// /.}
+    # print those dots on a fixed-width space plus the percentage etc.
+    printf "\r\e[K|%-*s| %3d %% " "$w" "$dots" "$p"
+    print_status "$*"
+}
+
+FILES=()
+if [ $# -eq 0 ]; then
+    print_status "Scanning..."
+    while IFS= read -r -d $'\0'; do
+        FILES+=("$REPLY")
+    done < <(find ./*.mp4 -maxdepth 1 -type f -print0 2>/dev/null)
+    print_status_report "Scanned"
+else
+    FILES=("$@")
+fi
+
+MAX_FILE_LEN=-1
+FILES_LEN=${#FILES[@]}
+ITER=1
+for str in "${FILES[@]}"; do
+    filename=$(basename -- "$str")
+    extension="${filename##*.}"
+    filename="${filename%.*}"
+    prog "$(( 100 * $ITER / $FILES_LEN ))" "Processing..."
+    if [[ ${#filename} -gt ${MAX_FILE_LEN} ]]; then
+        MAX_FILE_LEN=${#filename}
+    fi
+    ITER=$(expr $ITER + 1)
+done
+
+print_status_report "Processed"
+
+ERRORED=()
+ITER=1
+for FILEPATH in "${FILES[@]}"; do
+    prog "$(( 100 * $ITER / $FILES_LEN ))" "Checking \`$FILEPATH\`"
+    SUCC=$(ffmpeg -v error -i "$FILEPATH" -f null - 2>&1)
+    if [ -n "$SUCC" ]; then
+        ERRORED+=("$FILEPATH")
+    fi
+    ITER=$(expr $ITER + 1)
+done
+
+print_status_report "Checked"
+
+if [ ! ${#ERRORED[@]} -eq 0 ]; then
+    echo "${ERRORED[@]}"
+fi
+

@@ -1,0 +1,68 @@
+#!/usr/bin/node
+
+const http = require('http');
+const queryString = require('querystring');
+
+async function request(url, options = {}) {
+    return new Promise((resolve, reject) => {
+	http
+	    .request(url, Object.assign({ method: 'POST' }, options), (resp) => {
+		let data = '';
+
+		resp.setEncoding('utf8');
+
+		resp.on('data', (chunk) => {
+		    data += chunk.toString();
+		});
+
+		resp.on('end', () => {
+		    resolve(JSON.parse(data));
+		});
+	    })
+	    .on('error', (err) => {
+		console.log(err);
+		reject(err);
+	    })
+	    .write(options.body);
+    });
+}
+
+async function main() {
+    const text = process.argv.slice(2).join(' ');
+
+    const bodyData = {
+	input_text: text,
+	outlang: 'sr',
+	speaker: 'AlfaNum Danica',
+	rate: 0.9995,
+	pitch: 0.875,
+	port: 5040,
+	enc: 1,
+	address: 'tts4.alfanum.co.rs',
+	server_id: 0,
+    };
+    
+    const body =
+	  queryString
+	  .stringify(bodyData)
+	  .replace(/%20/g, '+');
+
+    const payload = {
+	headers: {
+	    'Referer': 'http://www.alfanum.co.rs/index.php/sr/demonstracija/demonstracija-tts',
+	    'Cookie': 'a67aca0dc79fb9e2c80a98c6a8426c2e=ao3867mrhu3s87mdo5rblmrh90',
+	    'Content-Length': Buffer.byteLength(body),
+	    'Content-Type': 'application/x-www-form-urlencoded',
+	    'Origin': 'http://www.alfanum.co.rs',
+	    'Host': 'www.alfanum.co.rs',
+	    'Accept': 'application/json',
+	},
+	body,
+    };
+
+    const { file } = await request('http://www.alfanum.co.rs/tts_req.php', payload);
+    
+    return `https://${bodyData.address}:5050/ttsnovi/${file}`;
+}
+
+main().then(console.log);

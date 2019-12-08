@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    rebase_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+else
+    rebase_branch="$1"
+fi
+
+current_branch=$(git branch | grep \* | cut -d ' ' -f2)
+
+STASH_CMD=$(git stash)
+
+git pull --rebase                   && \
+git checkout "$rebase_branch"       && \
+git fetch --prune                   && \
+git pull --rebase                   && \
+git checkout "$current_branch"      && \
+git rebase "$rebase_branch"         && \
+git push --force
+
+if [[ "$?" -eq "0" ]] && [ "$STASH_CMD" != "No local changes to save" ]; then
+    git stash pop
+fi
