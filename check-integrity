@@ -66,5 +66,6 @@ print_status_report "Checked"
 
 if [ ! ${#ERRORED[@]} -eq 0 ]; then
     echo "${ERRORED[@]}"
+    exit 1
 fi
 
