@@ -1,0 +1,4 @@
+#!/bin/bash
+
+play -t mp3 -G --norm `do-serbian-tts "$@"`
+
