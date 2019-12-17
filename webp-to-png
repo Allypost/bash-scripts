@@ -1,0 +1,4 @@
+#!/bin/bash
+
+convert-a-to-b "webp" "png" $@
+

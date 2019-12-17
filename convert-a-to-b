@@ -1,0 +1,119 @@
+#!/bin/bash
+
+clear_line() {
+    printf "\r\033[2K"
+}
+
+print_status() {
+    printf "\e[3;4m%s\e[0m\r" "$1"
+}
+
+print_status_report() {
+    clear_line
+    print_status "$1"
+    echo
+}
+
+print_status_success() {
+    printf "\e[30;42m %s \e[0m" "$1"
+    shift
+    if [ ! -z $1 ]; then
+        printf " \e[4m%s\e[0m" "$*"
+    fi
+    printf "\n"
+}
+
+print_status_error() {
+    printf "\e[1;101m %s \e[0m\n" "$1"
+}
+
+if [[ $# < 2 ]]; then
+    echo "convert-a-to-b"
+    echo "   Convert all files between (media) file types"
+    echo "   If only target and source formats are specified, it will convert all files in the current directory"
+    echo "   Optionally, more parameters can be provided to specify which files to convert"
+    echo ""
+    echo "Usage: convert-a-to-b FROM_FORMAT TO_FORMAT [file file2 file3]"
+    echo "       eg. convert-a-to-b \"webm\" \"mp4\""
+    exit
+fi
+
+to_extension="$2"
+from_extension="$1"
+shift
+shift
+
+FILES=()
+if [ $# -eq 0 ]; then
+    print_status "Scanning..."
+    while IFS= read -r -d $'\0'; do
+        FILES+=("$REPLY")
+    done < <(find . -name "*.$from_extension" -maxdepth 1 -type f -print0 2>/dev/null)
+    print_status_report "Scanned"
+else
+    FILES=("$@")
+fi
+
+MAX_FILE_LEN=-1
+for str in "${FILES[@]}"; do
+    filename=$(basename -- "$str")
+    extension="${filename##*.}"
+    filename="${filename%.*}"
+
+    if [[ ${#filename} -gt ${MAX_FILE_LEN} ]]; then
+        MAX_FILE_LEN=${#filename}
+    fi
+done
+
+total="${#FILES[@]}"
+
+success=0
+for filepath in "${FILES[@]}"; do
+    location="$PWD"
+
+    filename=$(basename -- "$filepath")
+    extension="${filename##*.}"
+    filename="${filename%.*}"
+
+    oldName="${filename}.${extension}"
+    newName="${filename}.${to_extension}"
+
+    oldFull="${location}/${oldName}"
+    newFull="${location}/${newName}"
+
+    if [ -f "$newFull" ]; then
+        if [ -f "$oldFull" ]; then
+            kioclient5 move "$newFull" trash:/ 2>/dev/null
+        fi
+    fi
+
+    printf "Converting \e[1;36;40m%-${MAX_FILE_LEN}s\e[0m from \e[1m\`%s\`\e[0m to \e[1m\`%s\`\e[0m... " "$filename" "$extension" "$to_extension"
+
+    __OLD_TIMEFORMAT=$TIMEFORMAT
+    export TIMEFORMAT='%3lR'
+    res=`(time ffmpeg -y -loglevel panic -i "$oldFull" "$newFull") 2>&1`
+    res_exit_code=$?
+    cmd_duration=$(echo "$res" | tail -n1)
+    export TIMEFORMAT=${__OLD_TIMEFORMAT}
+    unset __OLD_TIMEFORMAT
+
+    if [[ "$res_exit_code" -ne '0' ]]; then
+        print_status_error "DEAD ($res_exit_code)"
+        rm "$newFull" 2>/dev/null
+        continue
+    fi
+
+    if [ -z `find "$newFull" -maxdepth 1 -type f -size +1k 2>/dev/null` ]; then
+        print_status_error "FAIL"
+        rm "$newFull" 2>/dev/null
+        continue
+    fi
+
+    touch -r "$oldFull" "$newFull"
+    kioclient5 move "$oldFull" trash:/ 2>/dev/null
+    print_status_success "DONE" "$cmd_duration"
+    ((success++))
+done
+
+print_status_success "FINISHED $success/$total"
+
