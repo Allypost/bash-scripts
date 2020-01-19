@@ -1,0 +1,31 @@
+#!/usr/bin/node
+
+const randBool =
+    (trueProbability = 0.5) =>
+        Math.random() < trueProbability
+    ;
+
+const flipCase =
+    (char) =>
+        char === char.toLowerCase()
+            ? char.toUpperCase()
+            : char.toLowerCase()
+    ;
+
+const text =
+    process
+        .argv
+        .slice(2)
+        .join(' ')
+        .split('')
+        .map(
+            (char) =>
+                randBool()
+                    ? char
+                    : flipCase(char)
+        )
+        .join('')
+    ;
+
+process.stdout.write(text);
+process.stdout.write('\n');
