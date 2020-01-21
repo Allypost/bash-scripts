@@ -1,0 +1,31 @@
+#!/usr/bin/node
+
+const isASCII =
+    (c) =>
+        33 <= c
+        && c <= 126
+    ;
+
+const fromASCII =
+    (chars) =>
+        chars
+            .split('')
+            .map((char) => {
+                let c = char.charCodeAt(0);
+
+                if (c === 32) {
+                    c = 12288;
+                }
+
+                if (isASCII(c)) {
+                    c += 2 ** 16 - 288;
+                }
+
+                return String.fromCharCode(c);
+            })
+            .join('')
+    ;
+
+const input = process.argv.slice(2).join(' ');
+
+console.log(fromASCII(input));
