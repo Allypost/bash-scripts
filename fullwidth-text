@@ -28,4 +28,5 @@ const fromASCII =
 
 const input = process.argv.slice(2).join(' ');
 
-console.log(fromASCII(input));
+process.stdout.write(fromASCII(input));
+
