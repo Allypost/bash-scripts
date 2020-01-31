@@ -1,5 +1,7 @@
 #!/bin/bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 clear_line() {
     printf "\r\033[2K"
 }
@@ -46,7 +48,7 @@ for filepath in "${FILES[@]}"; do
     HAS_AV1=$(mediainfo "$filepath" | grep -E 'Format\s*:\s* av01')
     if [[ ! -z "${HAS_AV1// /}" ]]; then
         printf "Transcoding \e[1;36;40m %s \e[0m... " "$filename"
-        reencode-video-file "$filepath" 2>/dev/null >/dev/null
+        "$DIR/reencode-video-file" "$filepath" 2>/dev/null >/dev/null
         print_status_success "Done"
     fi
     ((processed += 1))
