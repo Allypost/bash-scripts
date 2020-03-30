@@ -90,7 +90,7 @@ for filepath in "${FILES[@]}"; do
 
     __OLD_TIMEFORMAT=$TIMEFORMAT
     export TIMEFORMAT='%3lR'
-    res=`(time ffmpeg -y -loglevel panic -i "$oldFull" "$newFull") 2>&1`
+    res=`(time ffmpeg -y -loglevel panic -i "$oldFull" -ab 320k -map_metadata 0 "$newFull") 2>&1`
     res_exit_code=$?
     cmd_duration=$(echo "$res" | tail -n1)
     export TIMEFORMAT=${__OLD_TIMEFORMAT}
