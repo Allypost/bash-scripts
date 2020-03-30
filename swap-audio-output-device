@@ -1,0 +1,24 @@
+#!/bin/bash
+
+SINKS=$(pacmd list-sinks | grep index | cut -f2 -d':' | tr -d '[:blank:]')
+SINKS=($SINKS)
+
+CURRENT_SINK="$(pacmd list-sinks | grep index | grep '*' | cut -f5 -d' ')"
+
+for i in "${!SINKS[@]}"; do
+   if [[ "${SINKS[$i]}" = "${CURRENT_SINK}" ]]; then
+       new_index="$(((i+1) % ${#SINKS[@]}))"
+       break
+   fi
+done
+
+NEW_SINK="${SINKS[$new_index]}"
+
+pacmd set-default-sink "$NEW_SINK"
+
+pacmd list-sink-inputs  \
+| grep index            \
+| while read line; do
+    pacmd move-sink-input `echo $line | cut -f2 -d' '` "$NEW_SINK"
+done
+
