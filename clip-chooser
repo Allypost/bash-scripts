@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+CHOICE=$(echo -e "lenny\nshrug\nmoonface" | dmenu)
+
+function _choose() {
+    case $CHOICE in
+        lenny)
+            echo -n "( ͡° ͜ʖ ͡°)"
+            ;;
+        shrug)
+            echo -n "¯\\_(ツ)_/¯"
+            ;;
+        moonface)
+            echo -n "🌚"
+            ;;
+    esac
+}
+
+CHOICE=$(_choose)
+
+if [ ! -z "$CHOICE" ]; then
+    echo -n "$CHOICE" | xclip -sel clip
+fi
+
