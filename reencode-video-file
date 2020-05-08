@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 TEMP_FILE="$(mktemp -d -t "tmp.XXXXXXXXXXXXXXXXXXXX")"
 OLD_TIME="$(stat -c '%y' "$1")"

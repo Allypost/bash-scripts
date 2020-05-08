@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SINKS=$(pacmd list-sinks | grep index | cut -f2 -d':' | tr -d '[:blank:]')
 SINKS=($SINKS)

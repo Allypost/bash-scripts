@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Generate a random file to dump the pallette to
 palette_file="$(mktemp -t "tmp.XXXXXXXXXXXXXXXXXXXX.png")"
