@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CHOICE=$(echo -e "lenny\nshrug\nmoonface" | dmenu)
+CHOICE=$(echo -e "lenny\nshrug\nmoonface\nb" | dmenu)
 
 function _choose() {
     case $CHOICE in
@@ -12,6 +12,9 @@ function _choose() {
             ;;
         moonface)
             echo -n "🌚"
+            ;;
+        b)
+            echo -n "🅱️"
             ;;
     esac
 }
