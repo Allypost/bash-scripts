@@ -28,4 +28,4 @@ const text =
     ;
 
 process.stdout.write(text);
-process.stdout.write('\n');
+
