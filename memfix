@@ -2,5 +2,5 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-"$DIR/webm-to-mp4" && "$DIR/webp-to-png" && "$DIR/reencode-av1-videos"
+"$DIR/webm-to-mp4" && "$DIR/webp-to-png" && "$DIR/reencode-av1-videos" && "$DIR/reencode-hevc-videos"
 
