@@ -86,7 +86,7 @@ for filepath in "${FILES[@]}"; do
         fi
     fi
 
-    printf "Converting \e[1;36;40m%-${MAX_FILE_LEN}s\e[0m from \e[1m\`%s\`\e[0m to \e[1m\`%s\`\e[0m... " "$filename" "$extension" "$to_extension"
+    printf "Converting \e[1;36;40m %-${MAX_FILE_LEN}s \e[0m from \e[1m\`%s\`\e[0m to \e[1m\`%s\`\e[0m... " "$filename" "$extension" "$to_extension"
 
     __OLD_TIMEFORMAT=$TIMEFORMAT
     export TIMEFORMAT='%3lR'
