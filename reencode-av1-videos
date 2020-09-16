@@ -45,7 +45,8 @@ for filepath in "${FILES[@]}"; do
     filename=$(basename -- "$filepath")
     filename="${filename%.*}"
 
-    HAS_AV1=$(mediainfo "$filepath" | grep -iE 'Format\s*:\s* av0?1')
+    #HAS_AV1=$(mediainfo "$filepath" | grep -iE 'Format\s*:\s* av0?1')
+    HAS_AV1=$(mediainfo --Inform="Video;%Format%" "$filepath" | grep -iE 'av0?1')
     if [[ ! -z "${HAS_AV1// /}" ]]; then
         printf "Transcoding \e[1;36;40m %s \e[0m... " "$filename"
         "$DIR/reencode-video-file" "$filepath" 2>/dev/null >/dev/null
