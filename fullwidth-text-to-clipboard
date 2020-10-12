@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+FULLWIDTH_OUTPUT="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '' | $HOME/.scripts/fullwidth-text)"
+if [ ! -z $FULLWIDTH_OUTPUT ]; then
+	echo -n "$FULLWIDTH_OUTPUT" | xclip -sel clip
+fi
+
