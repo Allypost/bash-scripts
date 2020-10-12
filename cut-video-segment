@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+inputFile="$1"
+printf "Start time: "
+read fromTime
+printf "End time: "
+read toTime
+
+filename="$(basename -- "$1")"
+extension="${filename##*.}"
+filename="${filename%.*}"
+
+partNo="$(find . -maxdepth 1 -name "$filename.*.mp4" | cut -d'.' -f3 | sort -rn | head -n1)"
+if [[ -z "$partNo" ]]; then
+    partNo="0"
+fi
+partNo="$(( $partNo + 1 ))"
+
+tmpFilename="$filename.$partNo.tmp.$extension"
+newFilename="$filename.$partNo.mp4"
+
+ffmpeg -y -i "$inputFile" -async 20 -ss "$fromTime" -to "$toTime" "$tmpFilename"
+cut_filter="$(ffmpeg -i "$tmpFilename" -vf cropdetect -f null - 2>&1 | awk '/crop/ { print $NF }' | sort | uniq -c | sort -nr | rev | cut -d' ' -f1 | rev | head -n1)"
+ffmpeg -y -i "$tmpFilename" -vf "$cut_filter" -map_metadata -1 "$newFilename"
+rm -f "$tmpFilename"
+
