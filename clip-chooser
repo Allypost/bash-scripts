@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CHOICE=$(echo -e "lenny\nshrug\nmoonface\nb" | dmenu)
+CHOICE=$(echo -e "lenny\nshrug\nmoonface\nb\ncommunism" | dmenu)
 
 function _choose() {
     case $CHOICE in
@@ -16,6 +16,9 @@ function _choose() {
         b)
             echo -n "🅱️"
             ;;
+	communism)
+	    echo -n "☭"
+	    ;;
     esac
 }
 
