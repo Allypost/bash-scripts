@@ -1,33 +1,17 @@
 #!/usr/bin/env bash
 
-CHOICE=$(echo -e "lenny\nshrug\nmoonface\nb\ncommunism\nsigma" | dmenu)
+CHOICES=( \
+	'( ͡° ͜ʖ ͡°)' \
+	'¯\_(ツ)_/¯' \
+	'🌚' \
+	'🅱️' \
+	'☭' \
+	'Σ' \
+)
 
-function _choose() {
-    case $CHOICE in
-        lenny)
-            echo -n "( ͡° ͜ʖ ͡°)"
-            ;;
-        shrug)
-            echo -n "¯\\_(ツ)_/¯"
-            ;;
-        moonface)
-            echo -n "🌚"
-            ;;
-        b)
-            echo -n "🅱️"
-            ;;
-	communism)
-	    echo -n "☭"
-	    ;;
-	sigma)
-	    echo -n "Σ"
-	    ;;
-    esac
-}
-
-CHOICE=$(_choose)
+CHOICE="$(printf '%s\n' "${CHOICES[@]}" | rofi -dmenu -format i)"
 
 if [ ! -z "$CHOICE" ]; then
-    echo -n "$CHOICE" | xclip -sel clip
+    echo -n "${CHOICES[$CHOICE]}" | xclip -sel clip
 fi
 
