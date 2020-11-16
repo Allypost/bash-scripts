@@ -15,5 +15,7 @@ if [ ! -z "$CHOICE" ]; then
 	echo -n "${CHOICES[$CHOICE]}" |
 		cut -d'|' -f2- |
 		cut -c2- |
-		xclip -rmlastnl -sel clip
+		tr '\n' '\0' |
+		xargs -0 -I'{}' printf '%q' '{}' |
+		xargs xdotool type
 fi
