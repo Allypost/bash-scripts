@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+OUTPUT_DIR="$HOME/MEMES/%(id)s.%(ext)s"
+URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+TMP_FILE="/tmp/$(basename $0)_$(printf '%q' "$URL" | sed -e 's|/|^|gi')"
+
+if [[ -z "$URL" ]]; then
+  exit 0
+fi
+
+(
+  [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
+
+  mkdir -p "$HOME/MEMES"
+
+  youtube-dl -o "$OUTPUT_DIR" --exec 'touch {}' "$URL"
+
+  if [[ $? -eq 0 ]]; then
+    echo "Downloaded"
+  elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
+    curl -sL "$URL" |
+      pup 'meta[property="og:image"] attr{content}' |
+      sed -e 's/\&amp\;/\&/gi' |
+      xargs youtube-dl -o "$OUTPUT_DIR" --exec 'touch {}'
+  else
+    notify-send \
+      --urgency normal \
+      --expire-time 5000 \
+      --icon error \
+      --app-name 'meme downloader' \
+      'Download failed' \
+      "The meme downloader couldn't download the provided page"
+
+    exit 1
+  fi
+
+  notify-send \
+    --urgency low \
+    --expire-time 2000 \
+    --icon success \
+    --app-name 'meme downloader' \
+    'Download finished' \
+    "The MEME from $URL has finished downloading"
+) &>"$TMP_FILE"
