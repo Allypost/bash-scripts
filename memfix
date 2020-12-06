@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-"$DIR/webm-to-mp4" $@ && "$DIR/webp-to-png" $@ && "$DIR/reencode-av1-videos" $@ && "$DIR/reencode-hevc-videos" $@
-
+echo -n "" &&
+  "$DIR/convert-a-to-b" "webm" "mp4" $@ &&
+  "$DIR/convert-a-to-b" "webp" "png" $@ &&
+  "$DIR/reencode-av1-videos" $@ &&
+  "$DIR/reencode-hevc-videos" $@ &&
+  echo -n ""
