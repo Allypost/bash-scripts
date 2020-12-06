@@ -42,6 +42,10 @@ from_extension="$1"
 shift
 shift
 
+if [[ "$to_extension" == "$from_extension" ]]; then
+    exit
+fi
+
 FILES=()
 if [ $# -eq 0 ]; then
     print_status "Scanning..."
