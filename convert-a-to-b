@@ -54,7 +54,14 @@ if [ $# -eq 0 ]; then
     done < <(find . -name "*.$from_extension" -maxdepth 1 -type f -print0 2>/dev/null)
     print_status_report "Scanned"
 else
-    FILES=("$@")
+    for file in "$@"; do
+        filename="$(basename -- "$file")"
+        extension="${filename##*.}"
+
+        if [[ "$extension" == "$from_extension" ]]; then
+            FILES+=("$file")
+        fi
+    done
 fi
 
 MAX_FILE_LEN=-1
@@ -119,4 +126,3 @@ for filepath in "${FILES[@]}"; do
 done
 
 print_status_success "FINISHED $success/$total"
-
