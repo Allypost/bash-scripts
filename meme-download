@@ -13,8 +13,9 @@ fi
   [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
 
   mkdir -p "$MEME_DIR"
+  cd "$MEME_DIR"
 
-  youtube-dl -o "$OUTPUT_DIR" --exec 'touch {}' "$URL"
+  youtube-dl -o "$OUTPUT_DIR" --exec 'touch "{}" && memfix "{}"' "$URL"
 
   if [[ $? -eq 0 ]]; then
     echo "Downloaded"
@@ -22,7 +23,7 @@ fi
     curl -sL "$URL" |
       pup 'meta[property="og:image"] attr{content}' |
       sed -e 's/\&amp\;/\&/gi' |
-      xargs youtube-dl -o "$OUTPUT_DIR" --exec 'touch {}'
+      xargs youtube-dl -o "$OUTPUT_DIR" --exec 'touch "{}" && memfix "{}"'
   else
     notify-send \
       --urgency normal \
