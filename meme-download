@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-OUTPUT_DIR="$HOME/MEMES/%(id)s.%(ext)s"
+MEME_DIR="$HOME/MEMES"
+OUTPUT_DIR="$MEME_DIR/%(id)s.%(ext)s"
 URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
 TMP_FILE="/tmp/$(basename $0)_$(printf '%q' "$URL" | sed -e 's|/|^|gi')"
 
@@ -11,7 +12,7 @@ fi
 (
   [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
 
-  mkdir -p "$HOME/MEMES"
+  mkdir -p "$MEME_DIR"
 
   youtube-dl -o "$OUTPUT_DIR" --exec 'touch {}' "$URL"
 
