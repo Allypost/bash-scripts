@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-TEMP_FILE="$(mktemp -d -t "tmp.XXXXXXXXXXXXXXXXXXXX")"
+TEMP_FILE="$(mktemp -d -t "tmp.XXXXXXXXXXXXXXXXXXXX")/$(basename "$1")"
 OLD_TIME="$(stat -c '%y' "$1")"
 
-ffmpeg -i "$1" -preset slow "$TEMP_FILE/$1"
+ffmpeg -i "$1" -preset slow "$TEMP_FILE"
 kioclient5 move "$1" trash:/ 2>/dev/null
-mv "$TEMP_FILE/$1" "$1"
+mv "$TEMP_FILE" "$1"
 touch --date "$OLD_TIME" "$1"
