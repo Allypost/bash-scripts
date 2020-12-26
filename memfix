@@ -4,8 +4,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 echo -n "" &&
   "$DIR/convert-a-to-b" "webm" "mp4" $@ &&
-  "$DIR/convert-a-to-b" "mkv" "mp4" &&
-  "$DIR/convert-a-to-b" "mov" "mp4" &&
+  "$DIR/convert-a-to-b" "mkv" "mp4" $@ &&
+  "$DIR/convert-a-to-b" "mov" "mp4" $@ &&
   "$DIR/convert-a-to-b" "webp" "png" $@ &&
   "$DIR/reencode-av1-videos" $@ &&
   "$DIR/reencode-hevc-videos" $@ &&
