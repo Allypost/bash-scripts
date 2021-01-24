@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 MEME_DIR="$HOME/MEMES"
-OUTPUT_DIR="$MEME_DIR/%(id)s.$(date -u '+%s%N').%(ext)s"
+OUTPUT_DIR="$MEME_DIR/%(id)s.$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev).%(ext)s"
 URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
 TMP_FILE="/tmp/$(basename $0)_$(printf '%q' "$URL" | sed -e 's|/|^|gi')"
 
