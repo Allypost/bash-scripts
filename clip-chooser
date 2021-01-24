@@ -7,6 +7,7 @@ CHOICES=(
 	'B | 🅱️'
 	'communism | ☭'
 	'sigma | Σ'
+  'donger | ヽ༼ຈل͜ຈ༽ﾉ'
 )
 
 CHOICE="$(printf '%s\n' "${CHOICES[@]}" | rofi -dmenu -format i)"
