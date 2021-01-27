@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+notify-send --expire-time 2000 --app-name 'Lanča so funny' 'Lanča' 'Šaljem...'
+
+telegram-cli \
+  --sync-from-start \
+  --wait-dialog-list \
+  --permanent-msg-ids \
+  --permanent-peer-ids \
+  -e 'post_video Meme_men_2:_Gourmet_central /home/allypost/MEMES/troll/xd.mp4 "@Bener1337 xdddddddddddddddd"'
