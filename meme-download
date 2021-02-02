@@ -3,7 +3,9 @@
 MEME_DIR="$HOME/MEMES"
 OUTPUT_DIR="$MEME_DIR/%(id)s.$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev).%(ext)s"
 URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
-TMP_FILE="/tmp/$(basename $0)_$(printf '%q' "$URL" | sed -e 's|/|^|gi')"
+TMP_FILE="/tmp/$(basename $0)_"
+TMP_FILE_LENGTH="${#TMP_FILE}"
+TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
 
 if [[ -z "$URL" ]]; then
   exit 0
