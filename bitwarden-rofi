@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+entries=()
+message=''
+
+function update_entries() {
+  SAVEIFS="$IFS" # Save current IFS
+  IFS=$'\n'      # Change IFS to new line
+  entries="$(
+    rbw list --fields id,name,user,folder |
+      sed --regexp-extended 's/([^\t]+?)\t([^\t]+?)\t([^\t]+?)\t([^\t]+?)/\4\/\2\t[\3]\t[id: \1]\\0icon\\x1ffolder\\x1finfo\\x1f\1/' |
+      sed --regexp-extended 's|^/|(none)/|'
+  )"
+  entries=($entries)
+  IFS="$SAVEIFS" # Restore IFS
+}
+
+function display_rofi() {
+  for entry in "${entries[@]}"; do
+    echo -e "$entry"
+  done | rofi_config
+}
+
+function rofi_config() {
+  _message="Alt+a - Sync | Alt+p - password | Alt+u - username $message"
+  message=''
+  rofi \
+    -i \
+    -theme slate-slim \
+    -no-custom \
+    -width 100 \
+    -lines 5 \
+    -location 1 \
+    -font 'Noto Sans 10' \
+    -mesg "$_message" \
+    -p 'Bitwarden' \
+    -padding '0' \
+    -dmenu \
+    -kb-custom-19 'Alt+a' \
+    -kb-custom-11 'Alt+p' \
+    -kb-custom-12 'Alt+u' $@
+}
+
+function handle_rofi_type() {
+  id="$1"
+  field="$2"
+  method="$3"
+
+  data=""
+  case "$field" in
+  "username")
+    data="$(rbw list --fields id,user | grep "^$id" | cut -f2)"
+    ;;
+
+  "password")
+    data="$(rbw get "$id")"
+    ;;
+  esac
+
+  case "$method" in
+  "type")
+    echo "$data" | xargs xdotool type --clearmodifiers
+    ;;
+  "copy")
+    echo "$data" | xclip -sel clip
+    ;;
+  esac
+
+  exit
+}
+
+rbw unlock || exit 2
+
+update_entries
+
+while true; do
+  chosen="$(display_rofi)"
+  exit_code="$?"
+  chosen="$(echo "$chosen" | sed --regexp-extended "s|.*?\t\[id\: (.+?)\]$|\1|")"
+
+  case "$exit_code" in
+  0 | 20)
+    handle_rofi_type "$chosen" "password" "type"
+    ;;
+  21)
+    handle_rofi_type "$chosen" "username" "type"
+    ;;
+  28)
+    rbw sync
+    update_entries
+    message="| Synced"
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+done
