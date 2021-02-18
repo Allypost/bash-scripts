@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -o errexit -o pipefail -o noclobber -o nounset
+
+SERIES_NAME=""
+EPISODE=""
+DOWNLOAD_PREFERENCE=""
+DOWNLOAD_CHOOSE="no"
+NUMBER_FORMAT="%02d"
+
+SKIP_ARGS="0"
+while getopts f:n:e:d:D option; do
+  case "$option" in
+  n)
+    SERIES_NAME="$OPTARG"
+    ((SKIP_ARGS += 2))
+    ;;
+  e)
+    EPISODE="$OPTARG"
+    ((SKIP_ARGS += 2))
+    ;;
+  d)
+    DOWNLOAD_PREFERENCE="$OPTARG"
+    ((SKIP_ARGS += 2))
+    ;;
+  f)
+    NUMBER_FORMAT="$OPTARG"
+    ((SKIP_ARGS += 2))
+    ;;
+  D)
+    DOWNLOAD_CHOOSE="yes"
+    ((SKIP_ARGS += 1))
+    ;;
+  *)
+    echo "Unknown option \`$option'"
+    exit 3
+    ;;
+  esac
+done
+shift $SKIP_ARGS
+
+if [ -z "$SERIES_NAME" ]; then
+  echo "You must specify a series name (eg. ./$(basename $0) -n 'dr-stone-stone-wars')"
+  exit 2
+fi
+
+if [ -z "$EPISODE" ]; then
+  if [[ "$#" -eq '0' ]]; then
+    if [ "$(ls | wc -l)" -gt 1 ]; then
+      EPISODE="$(ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1)"
+    else
+      EPISODE="0"
+    fi
+
+    EPISODE="$(echo "$EPISODE" | sed 's/^0*//')"
+
+    ((EPISODE += 1))
+  else
+    EPISODE="$1"
+  fi
+fi
+
+# List all episodes
+# curl -sL "https://pantsubase.tv/anime/$SERIES_NAME" | pup '.episode a attr{href}'
+
+EPISODE="$(echo "$EPISODE" | sed 's/^0*//')"
+echo "Downloading \`$SERIES_NAME' episode ${EPISODE}"
+EPISODE_URL="https://pantsubase.tv/watch/$SERIES_NAME-episode-$(printf '%d' "$EPISODE")/"
+EPISODE="$(printf "$NUMBER_FORMAT" "$EPISODE")"
+
+echo "Fetching episode page..."
+
+DOWNLOAD_URL="$(curl "$EPISODE_URL" 2>/dev/null | pup 'iframe attr{src}')"
+
+if [ -z "$DOWNLOAD_URL" ]; then
+  echo "Episode $EPISODE can't be found"
+  exit 1
+fi
+
+DOWNLOAD_SITE="$(python3 -c "from urllib.parse import urlparse
+raw_url='$DOWNLOAD_URL'
+if raw_url.find('://') == -1:
+  url = urlparse('//' + raw_url,'http')
+else:
+  url = urlparse(raw_url)
+print(url.netloc)")"
+
+echo "Getting file from \`$DOWNLOAD_SITE'"
+
+VIDEO_LINK=""
+if [ "$DOWNLOAD_SITE" = 'ani.googledrive.stream' ]; then
+  VIDEO_LINK="$(youtube-dl --get-url "$DOWNLOAD_URL")"
+fi
+
+if [[ -z "$VIDEO_LINK" ]]; then
+  echo "Could not extract link"
+  exit 1
+fi
+
+aria2c --file-allocation=none --max-connection-per-server 16 --referer "$DOWNLOAD_URL" --out "$EPISODE.mp4" --check-certificate=false "$VIDEO_LINK"
