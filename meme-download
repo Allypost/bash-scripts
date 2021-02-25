@@ -6,6 +6,7 @@ URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
 TMP_FILE="/tmp/$(basename $0)_"
 TMP_FILE_LENGTH="${#TMP_FILE}"
 TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
+USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
 
 if [[ -z "$URL" ]]; then
   exit 0
@@ -17,12 +18,12 @@ fi
   mkdir -p "$MEME_DIR"
   cd "$MEME_DIR"
 
-  youtube-dl -o "$OUTPUT_DIR" --exec 'touch "{}" && memfix "{}"' "$URL"
+  youtube-dl -o "$OUTPUT_DIR" --user-agent "$USER_AGENT" --exec 'touch "{}" && memfix "{}"' "$URL"
 
   if [[ $? -eq 0 ]]; then
     echo "Downloaded"
   elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
-    curl -sL "$URL" |
+    curl -sL --user-agent "$USER_AGENT" "$URL" |
       pup 'meta[property="og:image"] attr{content}' |
       sed -e 's/\&amp\;/\&/gi' |
       xargs youtube-dl -o "$OUTPUT_DIR" --exec 'touch "{}" && memfix "{}"'
