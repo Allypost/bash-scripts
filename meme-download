@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 MEME_DIR="$HOME/MEMES"
-OUTPUT_DIR="$MEME_DIR/%(id)s.$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev).%(ext)s"
+FILE_IDENTIFIER="$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev)"
+OUTPUT_TEMPLATE="$MEME_DIR/$FILE_IDENTIFIER.%(id)s.%(ext)s"
 URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
 TMP_FILE="/tmp/$(basename $0)_"
 TMP_FILE_LENGTH="${#TMP_FILE}"
@@ -18,15 +19,17 @@ fi
   mkdir -p "$MEME_DIR"
   cd "$MEME_DIR"
 
-  youtube-dl -o "$OUTPUT_DIR" --user-agent "$USER_AGENT" --exec 'touch "{}" && memfix "{}"' "$URL"
+  youtube-dl -o "$OUTPUT_TEMPLATE" --user-agent "$USER_AGENT" --exec 'touch "{}" && memfix "{}"' "$URL"
 
-  if [[ $? -eq 0 ]]; then
+  FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
+
+  if [[ $? -eq 0 && ! -z "$FILE_EXISTS" ]]; then
     echo "Downloaded"
   elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
     curl -sL --user-agent "$USER_AGENT" "$URL" |
       pup 'meta[property="og:image"] attr{content}' |
       sed -e 's/\&amp\;/\&/gi' |
-      xargs youtube-dl -o "$OUTPUT_DIR" --exec 'touch "{}" && memfix "{}"'
+      xargs youtube-dl -o "$OUTPUT_TEMPLATE" --exec 'touch "{}" && memfix "{}"'
   else
     notify-send \
       --urgency normal \
