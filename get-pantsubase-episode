@@ -64,12 +64,12 @@ fi
 
 EPISODE="$(echo "$EPISODE" | sed 's/^0*//')"
 echo "Downloading \`$SERIES_NAME' episode ${EPISODE}"
-EPISODE_URL="https://pantsubase.tv/watch/$SERIES_NAME-episode-$(printf '%d' "$EPISODE")/"
+EPISODE_URL="https://pantsubase.tv/watch/$SERIES_NAME-episode-$(printf '%d' "$EPISODE")"
 EPISODE="$(printf "$NUMBER_FORMAT" "$EPISODE")"
 
 echo "Fetching episode page..."
 
-DOWNLOAD_URL="$(curl "$EPISODE_URL" 2>/dev/null | pup 'iframe attr{src}')"
+DOWNLOAD_URL="$(curl -sL "$EPISODE_URL" 2>/dev/null | pup 'iframe attr{src}')"
 
 if [ -z "$DOWNLOAD_URL" ]; then
   echo "Episode $EPISODE can't be found"
