@@ -84,9 +84,21 @@ DOWNLOAD_SITE="$(echo "$URL_INFO" | jq -r '.netloc')"
 echo "Getting file from \`$DOWNLOAD_SITE'"
 
 VIDEO_LINK=""
-if [ "$DOWNLOAD_SITE" = 'ani.googledrive.stream' ]; then
+case "$DOWNLOAD_SITE" in
+'ani.googledrive.stream')
   VIDEO_LINK="$(youtube-dl --get-url "$DOWNLOAD_URL")"
-fi
+  ;;
+
+'play.api-web.site')
+  ID="$(echo "$URL_INFO" | jq -r '.query.id | .[0]')"
+  VIDEO_LINK="$(curl -sL --data "id=$ID" 'https://play.api-web.site/anime/videourl.php' | jq -r '.url | .[-1].file')"
+  ;;
+
+*)
+  echo "Unknown download site: \`$DOWNLOAD_SITE'"
+  exit -1
+  ;;
+esac
 
 if [[ -z "$VIDEO_LINK" ]]; then
   echo "Could not extract link"
