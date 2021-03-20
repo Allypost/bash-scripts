@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -o errexit -o pipefail -o noclobber -o nounset
 
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
 SERIES_NAME=""
 EPISODE=""
 DOWNLOAD_PREFERENCE=""
@@ -76,13 +78,8 @@ if [ -z "$DOWNLOAD_URL" ]; then
   exit 1
 fi
 
-DOWNLOAD_SITE="$(python3 -c "from urllib.parse import urlparse
-raw_url='$DOWNLOAD_URL'
-if raw_url.find('://') == -1:
-  url = urlparse('//' + raw_url,'http')
-else:
-  url = urlparse(raw_url)
-print(url.netloc)")"
+URL_INFO="$(echo "$DOWNLOAD_URL" | "$DIR/url-info" | jq -c '.[0]')"
+DOWNLOAD_SITE="$(echo "$URL_INFO" | jq -r '.netloc')"
 
 echo "Getting file from \`$DOWNLOAD_SITE'"
 
