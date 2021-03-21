@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+SELECT_WINDOW=1
+
+SKIP_ARGS="0"
+while getopts c option; do
+  case "$option" in
+  c)
+    SELECT_WINDOW=0
+    ((SKIP_ARGS += 1))
+    ;;
+  *)
+    echo "Unknown option \`$option'"
+    exit 3
+    ;;
+  esac
+done
+shift $SKIP_ARGS
+
+if [ "$SELECT_WINDOW" -eq 1 ]; then
+  WINDOW_ID="$(xdotool selectwindow)"
+else
+  WINDOW_ID="$(xdotool getactivewindow)"
+fi
+
+maim --window "$WINDOW_ID" | xclip -selection clipboard -t image/png &&
+  notify-send \
+    'Window Screenshot' \
+    "<b>Captured screenshot:</b>\n<i>$(xdotool getwindowname "$WINDOW_ID")</i>" \
+    -i showfoto \
+    --app-name Screenshot
