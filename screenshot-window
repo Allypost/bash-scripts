@@ -23,7 +23,19 @@ else
   WINDOW_ID="$(xdotool getactivewindow)"
 fi
 
-maim --window "$WINDOW_ID" | xclip -selection clipboard -t image/png &&
+function take-screenshot() {
+  maim \
+    --window "$WINDOW_ID" \
+    --format png \
+    --quality 10 \
+    --hidecursor |
+    convert - \( +clone -background black -shadow 57x15+0+13 \) +swap -background none -layers merge +repage - |
+    xclip \
+      -selection clipboard \
+      -t image/png
+}
+
+take-screenshot &&
   notify-send \
     'Window Screenshot' \
     "<b>Captured screenshot:</b>\n<i>$(xdotool getwindowname "$WINDOW_ID")</i>" \
