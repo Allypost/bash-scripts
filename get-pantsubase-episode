@@ -80,6 +80,7 @@ fi
 
 URL_INFO="$(echo "$DOWNLOAD_URL" | "$DIR/url-info" | jq -c '.[0]')"
 DOWNLOAD_SITE="$(echo "$URL_INFO" | jq -r '.netloc')"
+REFERER="$DOWNLOAD_URL"
 
 echo "Getting file from \`$DOWNLOAD_SITE'"
 
@@ -94,6 +95,11 @@ case "$DOWNLOAD_SITE" in
   VIDEO_LINK="$(curl -sL --data "id=$ID" 'https://play.api-web.site/anime/videourl.php' | jq -r '.url | .[-1].file')"
   ;;
 
+'gogo-stream.com')
+  VIDEO_LINK="$(download-gogo-stream-video -e "$DOWNLOAD_URL")"
+  REFERER="$VIDEO_LINK"
+  ;;
+
 *)
   echo "Unknown download site: \`$DOWNLOAD_SITE'"
   exit -1
@@ -105,4 +111,4 @@ if [[ -z "$VIDEO_LINK" ]]; then
   exit 1
 fi
 
-aria2c --file-allocation=none --max-connection-per-server 16 --referer "$DOWNLOAD_URL" --out "$EPISODE.mp4" --check-certificate=false "$VIDEO_LINK"
+aria2c --file-allocation=none --max-connection-per-server 16 --referer "$REFERER" --out "$EPISODE.mp4" --check-certificate=false "$VIDEO_LINK"
