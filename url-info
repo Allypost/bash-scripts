@@ -8,7 +8,7 @@ from urllib.parse import urlparse, parse_qs
 def parse_url(raw_url: str) -> dict:
     url = raw_url.strip()
 
-    if url.find('://') == -1:
+    if url.find('://') == -1 and not url.startswith('//'):
         parsed_url = urlparse('//' + url, 'http')
     else:
         parsed_url = urlparse(url)
