@@ -92,7 +92,7 @@ case "$DOWNLOAD_SITE" in
 
 'play.api-web.site')
   ID="$(echo "$URL_INFO" | jq -r '.query.id | .[0]')"
-  VIDEO_LINK="$(curl -sL --data "id=$ID" 'https://play.api-web.site/anime/videourl.php' | jq -r '.url | .[-1].file')"
+  VIDEO_LINK="$(curl -sL --data "id=$ID" 'https://play.api-web.site/anime/src.php' | jq -r '.url | sort_by(.size) | .[-1].src')"
   ;;
 
 'gogo-stream.com')
