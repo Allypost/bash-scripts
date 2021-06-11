@@ -43,6 +43,9 @@ fi
       pup 'meta[property="og:image"] attr{content}' |
       sed -e 's/\&amp\;/\&/gi' |
       xargs youtube-dl -o "$OUTPUT_TEMPLATE" --exec 'touch "{}" && memfix "{}"'
+  elif [[ "$URL" =~ https\:\/\/(www\.)?twitter\.com\/[^/]+/status/[0-9]+ ]]; then
+    . $0 "$(get-twitter-screenshot "$URL")"
+    exit 0
   else
     notify-send \
       --urgency normal \
