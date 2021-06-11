@@ -28,6 +28,15 @@ fi
   FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
 
   if [[ $? -eq 0 && ! -z "$FILE_EXISTS" ]]; then
+    filename=$(basename -- "$FILE_EXISTS")
+    extension="${filename##*.}"
+    filename="${filename%.*}"
+
+    if [ $extension = 'unknown_video' ]; then
+      proper_extension="$(file --extension "$FILE_EXISTS" | rev | cut -d':' -f1 | rev | cut -d'/' -f1 | awk '{$1=$1};1')"
+      mv "$FILE_EXISTS" "$MEME_DIR/$filename.$proper_extension"
+    fi
+
     echo "Downloaded"
   elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
     curl -sL --user-agent "$USER_AGENT" "$URL" |
