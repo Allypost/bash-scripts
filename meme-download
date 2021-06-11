@@ -3,7 +3,11 @@
 MEME_DIR="$HOME/MEMES"
 FILE_IDENTIFIER="$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev)"
 OUTPUT_TEMPLATE="$MEME_DIR/$FILE_IDENTIFIER.%(id)s.%(ext)s"
-URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+if [ -z "$1" ]; then
+  URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+else
+  URL="$1"
+fi
 TMP_FILE="/tmp/$(basename $0)_"
 TMP_FILE_LENGTH="${#TMP_FILE}"
 TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
