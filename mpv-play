@@ -6,4 +6,8 @@ else
   URL="$1"
 fi
 
+if [ -z "$URL" ]; then
+  exit 0
+fi
+
 mpv "$URL"
