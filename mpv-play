@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+if [ -z "$1" ]; then
+  URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+else
+  URL="$1"
+fi
+
+mpv "$URL"
