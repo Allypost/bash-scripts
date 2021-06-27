@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+entries=()
+message=''
+
+function list-entries() {
+  pacmd list-cards |
+    egrep "[^<]output:" |
+    egrep -v "input" |
+    egrep -v '\Wavailable: no\W' |
+    cut -d':' -f2- |
+    awk -F ' Output ' '{print $1}' |
+    awk -F ': ' '{print $2 "\t" "[profile: " $1 "]"}'
+}
+
+function update_entries() {
+  SAVEIFS="$IFS" # Save current IFS
+  IFS=$'\n'      # Change IFS to new line
+  entries="$(list-entries)"
+  entries=($entries)
+  IFS="$SAVEIFS" # Restore IFS
+}
+
+function display_rofi() {
+  for entry in "${entries[@]}"; do
+    echo -e "$entry"
+  done | rofi_config
+}
+
+function rofi_config() {
+  _message="Alt+a - Refresh $message"
+  message=''
+  rofi \
+    -i \
+    -theme slate-slim \
+    -no-custom \
+    -width 100 \
+    -lines 5 \
+    -location 1 \
+    -font 'Noto Sans 10' \
+    -mesg "$_message" \
+    -p 'Sound profile' \
+    -padding '0' \
+    -dmenu \
+    -kb-custom-19 'Alt+a' \
+    $@
+}
+
+function get-profile() {
+  echo "$1" | sed --regexp-extended "s|.*?\t\[profile\: (.+?)\]$|\1|"
+}
+
+function set-sound-profile-to() {
+  pacmd set-card-profile 0 "output:$1"
+}
+
+update_entries
+
+while true; do
+  chosen="$(display_rofi)"
+  exit_code="$?"
+  chosen="$(get-profile "$chosen")"
+
+  case "$exit_code" in
+  0)
+    set-sound-profile-to "$chosen"
+    exit
+    ;;
+  28)
+    update_entries
+    message="| Synced"
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+done
