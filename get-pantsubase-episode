@@ -5,8 +5,6 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 SERIES_NAME=""
 EPISODE=""
-DOWNLOAD_PREFERENCE=""
-DOWNLOAD_CHOOSE="no"
 NUMBER_FORMAT="%02d"
 
 SKIP_ARGS="0"
@@ -20,17 +18,9 @@ while getopts f:n:e:d:D option; do
     EPISODE="$OPTARG"
     ((SKIP_ARGS += 2))
     ;;
-  d)
-    DOWNLOAD_PREFERENCE="$OPTARG"
-    ((SKIP_ARGS += 2))
-    ;;
   f)
     NUMBER_FORMAT="$OPTARG"
     ((SKIP_ARGS += 2))
-    ;;
-  D)
-    DOWNLOAD_CHOOSE="yes"
-    ((SKIP_ARGS += 1))
     ;;
   *)
     echo "Unknown option \`$option'"
