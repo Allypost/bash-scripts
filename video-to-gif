@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
 
 # Generate a random file to dump the pallette to
-palette_file="$(mktemp -t "tmp.XXXXXXXXXXXXXXXXXXXX.png")"
+palette_file="$(mktemp -t "mp4-to-gif.XXXXXXXXXXXXXXXXXXXX.png")"
+
+input_file="$1"
 
 # Extract filename without extension
-filename="$(basename -- "$1")"
+filename="$(basename -- "$input_file")"
 filename="${filename%.*}"
 
 # Reduce FPS and scale down
-filters="fps=12,scale=320:-2:flags=lanczos"
+filters="fps=30,scale=320:-2:flags=lanczos"
 
 # Generate palette for the gif (vastly reduces size and somewhat improves quality)
-ffmpeg -v warning -y -i "$1" -vf "$filters,palettegen=stats_mode=diff" "$palette_file"
+ffmpeg \
+  -v warning \
+  -i "$input_file" \
+  -vf "$filters,palettegen=stats_mode=diff" \
+  -y "$palette_file"
+
 # Generate the gif with the palette
-ffmpeg -i "$1" -i "$palette_file" -lavfi "$filters,paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 "$filename.gif"
+ffmpeg \
+  -v warning \
+  -i "$input_file" \
+  -i "$palette_file" \
+  -lavfi "$filters [x]; [x][1:v] paletteuse=dither=floyd_steinberg" \
+  -loop 0 \
+  -y "$filename.gif"
 
 # Clean up after yourself
 rm "$palette_file"
