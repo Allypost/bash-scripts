@@ -310,7 +310,7 @@ def main():
                 print()
                 print(".m3u8 not implemented")
                 print()
-                exit()
+                exit(1)
             else:
                 download_cmd = [
                     "aria2c",
@@ -334,6 +334,9 @@ def main():
                         if not line.startswith('[#'):
                             continue
                         log_dim(line.strip(), return_line=True)
+
+                    if proc.returncode != 0:
+                        raise Exception("Something broke")
         except Exception:
             continue
 
