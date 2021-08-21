@@ -1,108 +1,353 @@
-#!/usr/bin/env bash
-set -o errexit -o pipefail -o noclobber -o nounset
+#!/usr/bin/env python3
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+import os
+import subprocess
+import sys
+import argparse
+import requests
+import re
+from collections.abc import Iterable
+import urllib.parse
+from bs4 import BeautifulSoup
 
-SERIES_NAME=""
-EPISODE=""
-NUMBER_FORMAT="%02d"
 
-SKIP_ARGS="0"
-while getopts f:n:e:d:D option; do
-  case "$option" in
-  n)
-    SERIES_NAME="$OPTARG"
-    ((SKIP_ARGS += 2))
-    ;;
-  e)
-    EPISODE="$OPTARG"
-    ((SKIP_ARGS += 2))
-    ;;
-  f)
-    NUMBER_FORMAT="$OPTARG"
-    ((SKIP_ARGS += 2))
-    ;;
-  *)
-    echo "Unknown option \`$option'"
-    exit 3
-    ;;
-  esac
-done
-shift $SKIP_ARGS
+def flatten(coll):
+    for i in coll:
+        if isinstance(i, Iterable) and not isinstance(i, str):
+            for subc in flatten(i):
+                yield subc
+        else:
+            yield i
 
-if [ -z "$SERIES_NAME" ]; then
-  echo "You must specify a series name (eg. ./$(basename $0) -n 'dr-stone-stone-wars')"
-  exit 2
-fi
 
-if [ -z "$EPISODE" ]; then
-  if [[ "$#" -eq '0' ]]; then
-    if [ "$(ls | wc -l)" -gt 1 ]; then
-      EPISODE="$(ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1)"
-    else
-      EPISODE="0"
-    fi
+class Chalk:
+    bg_blue_bright = '104m'
+    bg_yellow_bright = '103m'
+    bg_red = '41m'
+    bg_green = '42m'
 
-    EPISODE="$(echo "$EPISODE" | sed 's/^0*//')"
+    dim = '2m'
+    black = '30m'
+    white = '37m'
 
-    ((EPISODE += 1))
-  else
-    EPISODE="$1"
-  fi
-fi
+    bold = '1m'
+    italic = '3m'
 
-# List all episodes
-# curl -sL "https://pantsubase.tv/anime/$SERIES_NAME" | pup '.episode a attr{href}'
 
-EPISODE="$(echo "$EPISODE" | sed 's/^0*//')"
-echo "Downloading \`$SERIES_NAME' episode ${EPISODE}"
-EPISODE_URL="https://pantsubase.tv/watch/$SERIES_NAME-episode-$(printf '%d' "$EPISODE")"
-EPISODE="$(printf "$NUMBER_FORMAT" "$EPISODE")"
+parser = argparse.ArgumentParser(
+    description="Download videos from pantsubase.tv",
+    usage="%(prog)s -n 'series-name-here' [options]",
+)
 
-echo "Fetching episode page..."
+parser.add_argument(
+    "series",
+    help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+    type=str,
+    nargs='?',
+)
 
-DOWNLOAD_URL="$(curl -sL "$EPISODE_URL" 2>/dev/null | pup 'iframe attr{src}')"
+parser.add_argument(
+    "-n, --series-name",
+    help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+    type=str,
+    nargs='?',
+    dest="series_name",
+)
 
-if [ -z "$DOWNLOAD_URL" ]; then
-  echo "Episode $EPISODE can't be found"
-  exit 1
-fi
+parser.add_argument(
+    "-e, --episode",
+    help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
+    type=int,
+    nargs='?',
+    required=False,
+    default=None,
+    dest="episode",
+)
 
-URL_INFO="$(echo "$DOWNLOAD_URL" | "$DIR/url-info" | jq -c '.[0]')"
-DOWNLOAD_SITE="$(echo "$URL_INFO" | jq -r '.netloc')"
-REFERER="$DOWNLOAD_URL"
+parser.add_argument(
+    "-f, --number-format",
+    help="String format on how to name files. Defaults to: %02d",
+    type=str,
+    required=False,
+    default="%02d",
+    dest="number_format",
+)
 
-echo "Getting file from \`$DOWNLOAD_SITE'"
+argv = parser.parse_args()
 
-VIDEO_LINK=""
-case "$DOWNLOAD_SITE" in
-'ani.googledrive.stream')
-  VIDEO_LINK="$(youtube-dl --get-url "$DOWNLOAD_URL")"
-  ;;
 
-'play.api-web.site')
-  ID="$(
-    echo "$URL_INFO" |
-      jq -r '.query.id | .[0]' |
-      python3 -c 'import urllib.parse; print(urllib.parse.quote(input()));'
-  )"
-  VIDEO_LINK="$(curl -sL --data "id=$ID" 'https://play.api-web.site/anime/src.php' | jq -r '.url | sort_by(.size) | .[-1].src')"
-  ;;
+def write(*text):
+    out = ''.join(text)
+    sys.stdout.write(out)
+    return out
 
-'gogo-stream.com')
-  VIDEO_LINK="$(download-gogo-stream-video -e "$DOWNLOAD_URL")"
-  REFERER="$VIDEO_LINK"
-  ;;
 
-*)
-  echo "Unknown download site: \`$DOWNLOAD_SITE'"
-  exit -1
-  ;;
-esac
+def esc(string):
+    return f'\x1B[{string}'
 
-if [[ -z "$VIDEO_LINK" ]]; then
-  echo "Could not extract link"
-  exit 1
-fi
 
-aria2c --file-allocation=none --max-connection-per-server 16 --referer "$REFERER" --out "$EPISODE.mp4" --check-certificate=false "$VIDEO_LINK"
+def move_up(lines):
+    return write(esc(f'{lines}A'), '\r')
+
+
+def clear_line():
+    return esc('K')
+
+
+def log(*text):
+    return write(
+        clear_line(),
+        *text,
+        '\r\n',
+    )
+
+
+def log_and_return(text):
+    lines = str(text).split("\n")
+    lines_written = len(lines)
+    for line in lines:
+        log(line)
+    move_up(lines_written)
+
+
+def to_format(*colours):
+    return ''.join([esc(c) for c in flatten(colours)])
+
+
+def dim(text):
+    return to_format(Chalk.italic, Chalk.dim) + text + esc("0m")
+
+
+def badge(text, *colours):
+    return f"{to_format(colours)} {text} {esc('0m')}"
+
+
+def log_dim(text, *, return_line=False):
+    t = dim(text)
+
+    if return_line:
+        return log_and_return(t)
+    else:
+        return log(t)
+
+
+def log_error(*text):
+    return log(
+        badge('✘', Chalk.bold, Chalk.white, Chalk.bg_red),
+        " ",
+        *text
+    )
+
+
+def log_success(*text):
+    return log(
+        badge('✔', Chalk.bold, Chalk.white, Chalk.bg_green),
+        " ",
+        *text
+    )
+
+
+def get_episode_number_to_download():
+    if argv.episode:
+        return argv.episode
+
+    last_episode_number = os.popen(
+        "ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1"
+    ).read()
+
+    return int(last_episode_number or 0) + 1
+
+
+def get_download_urls(episode_url):
+    log_dim("Fetching episode page...", return_line=True)
+    response = requests.get(episode_url)
+    if not response:
+        return []
+    page_html = response.text
+    log_dim("Parsing html...", return_line=True)
+    soup = BeautifulSoup(page_html, 'html.parser')
+
+    def tag_filter(tag):
+        return tag.has_attr('id') and tag['id'] == 'select-iframe-to-display'
+
+    def parse_value(value):
+        value_parts = str(value).split('-#-')
+
+        video_link = value_parts[0]
+        host = value_parts[-1]
+
+        if host == 'fembed':
+            return f"https://fcdn.stream/v/{video_link}"
+        elif host == 'gogo-stream':
+            return f"https://gogo-stream.com/streaming.php?id={video_link}"
+        else:
+            return None
+
+    def fix_url(url):
+        if not url:
+            return None
+
+        if re.compile(r'^https?://').match(url):
+            return url
+
+        if str(url).startswith('//'):
+            return f"https:{url}"
+
+        log(f"Unknown url format: `{url}'")
+
+        return None
+
+    write(clear_line())
+    urls = [
+        soup.iframe['src'],
+        *[
+            parse_value(tag['value'])
+            for tag
+            in soup.find(tag_filter).find_all('option')
+            if tag.has_attr('value')
+        ]
+    ]
+
+    return list(set([
+        fix_url(url)
+        for url
+        in urls
+        if url
+    ]))
+
+
+def get_video_url(download_url):
+    url_info = urllib.parse.urlparse(download_url)
+    hostname = url_info.netloc
+
+    log_dim(f"Trying `{hostname}`", return_line=True)
+
+    def handle__ani_googledrive_stream():
+        return {
+            "url": os.popen(f"youtube-dl --get-url '{download_url}'").read().strip()
+        }
+
+    def handle__play_api_web_site():
+        request = requests.post(
+            "https://play.api-web.site/src.php",
+            data={
+                "id": urllib.parse.parse_qs(url_info.query)["id"],
+            },
+        )
+
+        if not request.status_code:
+            log_dim("No data from `play.api-web.site`")
+            return None
+
+        urls = request.json()["url"]
+        sorted_urls = sorted(urls, key=lambda x: x["size"], reverse=True)
+
+        return {
+            "url": sorted_urls[0]["src"]
+        }
+
+    def handle__gogo_stream_com():
+        return {
+            "url": subprocess.run(
+                [
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "./download-gogo-stream-video",
+                    ),
+                    "-e", download_url,
+                ],
+                capture_output=True,
+                text='utf-8',
+                check=True,
+            ).stdout.strip()
+        }
+
+    handlers = {
+        "ani.googledrive.stream": handle__ani_googledrive_stream,
+        "play.api-web.site": handle__play_api_web_site,
+        "gogo-stream.com": handle__gogo_stream_com,
+    }
+
+    if hostname not in handlers:
+        log_dim(f"Could not extract link for `{hostname}`")
+        raise Exception("No handler")
+
+    return handlers[hostname]()
+
+
+def main():
+    series_name = argv.series_name or argv.series
+    episode_number = get_episode_number_to_download()
+    number_format = argv.number_format
+
+    if series_name is None:
+        raise Exception("No series name")
+
+    episode_url = f'https://pantsubase.tv/watch/{series_name}-episode-{episode_number}'
+
+    log(f'Downloading {badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+
+    download_urls = get_download_urls(episode_url)
+
+    if (len(download_urls) <= 0):
+        log_error(f"Episode {episode_number} can't be found")
+        exit(1)
+
+    processed = 0
+    for download_url in download_urls:
+        processed += 1
+        try:
+            download_info = get_video_url(download_url)
+            url = download_info["url"]
+            referer = download_info["referer"] if "referer" in download_info else url
+
+            hostname = urllib.parse.urlparse(download_url).netloc
+
+            log(f"{to_format(Chalk.italic)}Downloading from {hostname}{to_format('23m')}")
+
+            if url.endswith('.m3u8'):
+                print()
+                print()
+                print(".m3u8 not implemented")
+                print()
+                exit()
+            else:
+                download_cmd = [
+                    "aria2c",
+                    "--check-certificate=false",
+                    "--stderr=true",
+                    "--show-console-readout=true",
+                    "--file-allocation=none",
+                    "--max-connection-per-server=8",
+                    "--referer", referer,
+                    "--out", f"{number_format % (episode_number)}.mp4",
+                    url,
+                ]
+
+                with subprocess.Popen(
+                    download_cmd,
+                    stderr=subprocess.PIPE,
+                    bufsize=1,
+                    universal_newlines=True,
+                ) as proc:
+                    for line in proc.stderr:
+                        if not line.startswith('[#'):
+                            continue
+                        log_dim(line.strip(), return_line=True)
+        except Exception:
+            continue
+
+        for _ in range(processed):
+            write(clear_line())
+            move_up(1)
+        log_success(f"Episode {episode_number} downloaded")
+        exit()
+
+    write(clear_line())
+    move_up(processed)
+    log_error(f"Failed to download episode {episode_number}")
+    exit(1)
+
+
+if __name__ == '__main__':
+    main()
