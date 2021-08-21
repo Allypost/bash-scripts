@@ -335,7 +335,7 @@ def main():
                             continue
                         log_dim(line.strip(), return_line=True)
 
-                    if proc.returncode != 0:
+                    if proc.wait() != 0:
                         raise Exception("Something broke")
         except Exception:
             continue
