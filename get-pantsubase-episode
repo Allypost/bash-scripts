@@ -4,14 +4,20 @@ import os
 import subprocess
 import sys
 import argparse
+from typing import Generator, TypeVar, Union
 import requests
 import re
 from collections.abc import Iterable
 import urllib.parse
 from bs4 import BeautifulSoup
+from dataclasses import dataclass
+import asyncio
+from ffmpeg import FFmpeg
+
+T = TypeVar("T")
 
 
-def flatten(coll):
+def flatten(coll: Iterable[T]) -> Generator[T, None, None]:
     for i in coll:
         if isinstance(i, Iterable) and not isinstance(i, str):
             for subc in flatten(i):
@@ -110,19 +116,19 @@ def log_and_return(text):
     move_up(lines_written)
 
 
-def to_format(*colours):
+def to_format(*colours: list[str]) -> str:
     return ''.join([esc(c) for c in flatten(colours)])
 
 
-def dim(text):
+def dim(text: str) -> str:
     return to_format(Chalk.italic, Chalk.dim) + text + esc("0m")
 
 
-def badge(text, *colours):
+def badge(text: str, *colours: list[str]) -> str:
     return f"{to_format(colours)} {text} {esc('0m')}"
 
 
-def log_dim(text, *, return_line=False):
+def log_dim(text: str, *, return_line: bool = False) -> str:
     t = dim(text)
 
     if return_line:
@@ -131,7 +137,7 @@ def log_dim(text, *, return_line=False):
         return log(t)
 
 
-def log_error(*text):
+def log_error(*text: list[str]) -> str:
     return log(
         badge('✘', Chalk.bold, Chalk.white, Chalk.bg_red),
         " ",
@@ -139,7 +145,7 @@ def log_error(*text):
     )
 
 
-def log_success(*text):
+def log_success(*text: str) -> str:
     return log(
         badge('✔', Chalk.bold, Chalk.white, Chalk.bg_green),
         " ",
@@ -147,7 +153,7 @@ def log_success(*text):
     )
 
 
-def get_episode_number_to_download():
+def get_episode_number_to_download() -> int:
     if argv.episode:
         return argv.episode
 
@@ -158,7 +164,7 @@ def get_episode_number_to_download():
     return int(last_episode_number or 0) + 1
 
 
-def get_download_urls(episode_url):
+def get_download_urls(episode_url: str) -> list[str]:
     log_dim("Fetching episode page...", return_line=True)
     response = requests.get(episode_url)
     if not response:
@@ -183,7 +189,7 @@ def get_download_urls(episode_url):
         else:
             return None
 
-    def fix_url(url):
+    def fix_url(url: Union[str, None]) -> Union[str, None]:
         if not url:
             return None
 
@@ -208,24 +214,29 @@ def get_download_urls(episode_url):
         ]
     ]
 
-    return list(set([
+    return list(filter(lambda x: x, set([
         fix_url(url)
         for url
         in urls
-        if url
-    ]))
+    ])))
 
 
-def get_video_url(download_url):
+@dataclass
+class VideoUrl:
+    url: str
+    referer: Union[str, None] = None
+
+
+def get_video_url(download_url: str) -> VideoUrl:
     url_info = urllib.parse.urlparse(download_url)
     hostname = url_info.netloc
 
     log_dim(f"Trying `{hostname}`", return_line=True)
 
     def handle__ani_googledrive_stream():
-        return {
-            "url": os.popen(f"youtube-dl --get-url '{download_url}'").read().strip()
-        }
+        url = os.popen(f"youtube-dl --get-url '{download_url}'").read().strip()
+
+        return VideoUrl(url=url)
 
     def handle__play_api_web_site():
         request = requests.post(
@@ -242,25 +253,25 @@ def get_video_url(download_url):
         urls = request.json()["url"]
         sorted_urls = sorted(urls, key=lambda x: x["size"], reverse=True)
 
-        return {
-            "url": sorted_urls[0]["src"]
-        }
+        url = sorted_urls[0]["src"]
+
+        return VideoUrl(url=url)
 
     def handle__gogo_stream_com():
-        return {
-            "url": subprocess.run(
-                [
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "./download-gogo-stream-video",
-                    ),
-                    "-e", download_url,
-                ],
-                capture_output=True,
-                text='utf-8',
-                check=True,
-            ).stdout.strip()
-        }
+        url = subprocess.run(
+            [
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "./download-gogo-stream-video",
+                ),
+                "-e", download_url,
+            ],
+            capture_output=True,
+            text='utf-8',
+            check=True,
+        ).stdout.strip()
+
+        return VideoUrl(url=url)
 
     handlers = {
         "ani.googledrive.stream": handle__ani_googledrive_stream,
@@ -298,8 +309,9 @@ def main():
         processed += 1
         try:
             download_info = get_video_url(download_url)
-            url = download_info["url"]
-            referer = download_info["referer"] if "referer" in download_info else url
+
+            url = download_info.url
+            referer = download_info.referer or url
 
             hostname = urllib.parse.urlparse(download_url).netloc
 
