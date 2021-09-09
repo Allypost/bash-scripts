@@ -1,7 +1,24 @@
 #!/usr/bin/env bash
 
 if [ -z "$1" ]; then
-  URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+  URL="$(
+    echo "" |
+      rofi \
+        -dmenu \
+        -theme-str '
+          window {
+            font: "Noto Sans 10";
+            padding: 0;
+          }
+
+          listview {
+            lines: 0;
+          }
+        ' \
+        -m \
+        -4 \
+			  -p 'mpv'
+  )"
 else
   URL="$1"
 fi
