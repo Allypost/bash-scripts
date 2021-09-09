@@ -4,7 +4,29 @@ MEME_DIR="$HOME/MEMES"
 FILE_IDENTIFIER="$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev)"
 OUTPUT_TEMPLATE="$MEME_DIR/$FILE_IDENTIFIER.%(id)s.%(ext)s"
 if [ -z "$1" ]; then
-  URL="$(echo "" | rofi -dmenu -lines 0 -m -4 -p '')"
+  URL="$(
+    echo "" |
+      rofi \
+        -dmenu \
+        -theme-str '
+          window {
+            font: "mononoki 10";
+            padding: 0;
+          }
+
+          listview {
+            lines: 0;
+          }
+
+          inputbar { 
+            children: [entry];
+          }
+        ' \
+        -m \
+        -4 \
+        -p \
+        ''
+  )"
 else
   URL="$1"
 fi

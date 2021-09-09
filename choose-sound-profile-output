@@ -33,13 +33,20 @@ function rofi_config() {
     -i \
     -theme slate-slim \
     -no-custom \
-    -width 100 \
-    -lines 5 \
     -location 1 \
-    -font 'Noto Sans 10' \
+    -theme-str '
+      window {
+        font: "Noto Sans 10";
+        padding: 0;
+        width: 100%;
+      }
+
+      listview {
+        lines: 5;
+      }
+    ' \
     -mesg "$_message" \
     -p 'Sound profile' \
-    -padding '0' \
     -dmenu \
     -kb-custom-19 'Alt+a' \
     $@
