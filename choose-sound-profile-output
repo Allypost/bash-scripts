@@ -57,7 +57,13 @@ function get-profile() {
 }
 
 function set-sound-profile-to() {
-  pactl set-card-profile 0 "output:$1"
+  CARD_ID="$(
+    pactl list short cards |
+      head -n1 |
+      cut -f1
+  )"
+
+  pactl set-card-profile "$CARD_ID" "output:$1"
 }
 
 update_entries
