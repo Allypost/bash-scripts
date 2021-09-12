@@ -3,8 +3,8 @@ entries=()
 message=''
 
 function list-entries() {
-  pacmd list-cards |
-    egrep "[^<]output:" |
+  pactl list cards |
+    grep -P '\t\toutput:' |
     egrep -v "input" |
     egrep -v '\Wavailable: no\W' |
     cut -d':' -f2- |
@@ -57,7 +57,7 @@ function get-profile() {
 }
 
 function set-sound-profile-to() {
-  pacmd set-card-profile 0 "output:$1"
+  pactl set-card-profile 0 "output:$1"
 }
 
 update_entries

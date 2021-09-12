@@ -1,24 +1,41 @@
 #!/usr/bin/env bash
 
-SINKS=$(pacmd list-sinks | grep index | cut -f2 -d':' | tr -d '[:blank:]')
+SINKS=$(
+    pactl list short sinks |
+        cut -f1
+)
 SINKS=($SINKS)
 
-CURRENT_SINK="$(pacmd list-sinks | grep index | grep '*' | cut -f5 -d' ')"
+CURRENT_SINK_NAME="$(
+    pactl info |
+        grep 'Default Sink: ' |
+        cut -d ':' -f2 |
+        tr -d '[:blank:]'
+)"
+
+CURRENT_SINK="$(
+    pactl list short sinks |
+        grep -P "\t$CURRENT_SINK_NAME\t" |
+        cut -f1
+)"
 
 for i in "${!SINKS[@]}"; do
-   if [[ "${SINKS[$i]}" = "${CURRENT_SINK}" ]]; then
-       new_index="$(((i+1) % ${#SINKS[@]}))"
-       break
-   fi
+    if [[ "${SINKS[$i]}" = "${CURRENT_SINK}" ]]; then
+        NEXT_SINK_SINKS_INDEX="$(((i + 1) % ${#SINKS[@]}))"
+        break
+    fi
 done
 
-NEW_SINK="${SINKS[$new_index]}"
+NEW_SINK="${SINKS[$NEXT_SINK_SINKS_INDEX]}"
 
-pacmd set-default-sink "$NEW_SINK"
+pactl set-default-sink "$NEW_SINK"
 
-pacmd list-sink-inputs  \
-| grep index            \
-| while read line; do
-    pacmd move-sink-input `echo $line | cut -f2 -d' '` "$NEW_SINK"
-done
-
+pactl list sink-inputs |
+    grep -E '^S' |
+    cut -d'#' -f2 |
+    while read SINK_ID; do
+        pactl \
+            move-sink-input \
+            "$SINK_ID" \
+            "$NEW_SINK"
+    done
