@@ -149,12 +149,12 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     # dood.la is behind cloudflare
     # streamtape.net ????
 
-    "www.mp4upload.com": handle__www_mp4upload_com,
     "streamani.net": handle__streamani_net,
-    "goload.one": handle__goload_one,
     "sbplay.one": handle__sbplay_one,
-    "mixdrop.co": handle__mixdrop_co,
+    "goload.one": handle__goload_one,
     "embedsito.com": handle__embedsito_com,
+    "www.mp4upload.com": handle__www_mp4upload_com,
+    "mixdrop.co": handle__mixdrop_co,
 }
 
 
