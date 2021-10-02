@@ -258,20 +258,10 @@ def get_video_url(download_url: str) -> VideoUrl:
         return VideoUrl(url=url)
 
     def handle__gogo_stream_com():
-        url = subprocess.run(
-            [
-                os.path.join(
-                    os.path.dirname(__file__),
-                    "./download-gogo-stream-video",
-                ),
-                "-e", download_url,
-            ],
-            capture_output=True,
-            text='utf-8',
-            check=True,
-        ).stdout.strip()
+        gogo_stream = __import__("download-gogo-stream-video")
+        url, referer = gogo_stream.get_download_url(download_url)
 
-        return VideoUrl(url=url)
+        return VideoUrl(url=url, referer=referer)
 
     handlers = {
         "ani.googledrive.stream": handle__ani_googledrive_stream,
