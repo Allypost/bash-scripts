@@ -307,6 +307,7 @@ def main():
             download_cmd = [
                 "yt-dlp",
                 "--no-warnings",
+                "--no-check-certificate",
                 "--concurrent-fragments", "16",
                 "--referer", referer,
                 "--output", f"{number_format % (episode_number)}.mp4",
@@ -327,10 +328,15 @@ def main():
                     log_dim(status, return_line=True)
 
                 if proc.wait() != 0:
+                    print(subprocess.list2cmdline(download_cmd))
                     raise Exception("Something broke")
         except Exception as e:
             if str(e) == "No handler":
                 continue
+
+            print(("\n" + "=" * 32) * 2)
+            print(e)
+            print(("=" * 32 + "\n") * 2)
 
         for _ in range(processed):
             write(clear_line())
