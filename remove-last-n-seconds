@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -xv
+
+TRIM_DURATION="$1"
+INPUT_FILE="$2"
+
+FILENAME="$(basename -- "$INPUT_FILE")"
+EXTENSION="${FILENAME##*.}"
+FILENAME="${FILENAME%.*}"
+
+OUTPUT_FILE="$(dirname "$INPUT_FILE")/$FILENAME.c.$EXTENSION"
+
+DURATION="$(ffprobe -i "$INPUT_FILE" -show_entries format=duration -v quiet -of csv="p=0")"
+FINAL_DURATION=$(echo "$DURATION - $TRIM_DURATION" | bc)
+
+ffmpeg -i "$INPUT_FILE" -preset veryslow -to "$FINAL_DURATION" "$OUTPUT_FILE"
+touch -r "$INPUT_FILE" "$OUTPUT_FILE"
+kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
