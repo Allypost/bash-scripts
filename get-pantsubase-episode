@@ -11,8 +11,6 @@ from collections.abc import Iterable
 import urllib.parse
 from bs4 import BeautifulSoup
 from dataclasses import dataclass
-import asyncio
-from ffmpeg import FFmpeg
 
 T = TypeVar("T")
 
