@@ -317,40 +317,33 @@ def main():
 
             log(f"{to_format(Chalk.italic)}Downloading from {hostname}{to_format('23m')}")
 
-            if url.endswith('.m3u8'):
-                print()
-                print()
-                print(".m3u8 not implemented")
-                print()
-                exit(1)
-            else:
-                download_cmd = [
-                    "aria2c",
-                    "--check-certificate=false",
-                    "--stderr=true",
-                    "--show-console-readout=true",
-                    "--file-allocation=none",
-                    "--max-connection-per-server=8",
-                    "--referer", referer,
-                    "--out", f"{number_format % (episode_number)}.mp4",
-                    url,
-                ]
+            download_cmd = [
+                "yt-dlp",
+                "--no-warnings",
+                "--concurrent-fragments", "16",
+                "--referer", referer,
+                "--output", f"{number_format % (episode_number)}.mp4",
+                url,
+            ]
+            download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
 
-                with subprocess.Popen(
-                    download_cmd,
-                    stderr=subprocess.PIPE,
-                    bufsize=1,
-                    universal_newlines=True,
-                ) as proc:
-                    for line in proc.stderr:
-                        if not line.startswith('[#'):
-                            continue
-                        log_dim(line.strip(), return_line=True)
+            with subprocess.Popen(
+                download_cmd,
+                stdout=subprocess.PIPE,
+                bufsize=1,
+                text=True,
+            ) as proc:
+                for line in proc.stdout:
+                    if not download_line.search(line):
+                        continue
+                    status = line.split(" ", maxsplit=1)[1].strip()
+                    log_dim(status, return_line=True)
 
-                    if proc.wait() != 0:
-                        raise Exception("Something broke")
-        except Exception:
-            continue
+                if proc.wait() != 0:
+                    raise Exception("Something broke")
+        except Exception as e:
+            if str(e) == "No handler":
+                continue
 
         for _ in range(processed):
             write(clear_line())
