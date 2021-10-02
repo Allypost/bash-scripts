@@ -1,97 +1,33 @@
-#!/usr/bin/env bash
-set -o errexit -o pipefail -o noclobber -o nounset
+#!/usr/bin/env -S deno run --quiet --allow-all --unstable
 
-DO_ECHO="0"
-while getopts e option; do
-  case "$option" in
-  e)
-    DO_ECHO="1"
-    shift 1
-    ;;
-  *)
-    echo "Unknown option \`$option'"
-    exit 3
-    ;;
-  esac
-done
+import {
+  $,
+} from 'https://deno.land/x/deno_dx@0.2.0/mod.ts';
+import yargs from 'https://deno.land/x/yargs@v17.0.1-deno/deno.ts';
+import { getDownloadLink } from './scripts/gogo-stream.ts';
 
-function doesnt-contain() {
-  if [[ $1 =~ (^|[[:space:]])$2($|[[:space:]]) ]]; then
-    return 1
-  else
-    return 0
-  fi
+const argv =
+  yargs(Deno.args)
+    .usage('Usage: download-gogo-stream-video $GOGO_STREAM_URL')
+
+    .alias('e', 'echo')
+    .nargs('e', 0)
+    .boolean('e')
+    .describe('e', 'If set returns the URL instead of downloading it')
+
+    // @ts-ignore: For some reason it exists but isn't picked up
+    .argv
+  ;
+
+const [gogoStreamUrl] = argv._;
+const url = await getDownloadLink(gogoStreamUrl);
+
+if (!url) {
+  Deno.exit(1);
 }
 
-function to-match() {
-  echo "://$1/"
+if (argv.echo) {
+  await Deno.stdout.write(new TextEncoder().encode(url));
+} else {
+  await $`youtube-dl --referer '${gogoStreamUrl}' '${url}'`
 }
-
-declare -A URLS
-URLS['mp4upload']="$(to-match 'www.mp4upload.com')"
-URLS['fcdn.stream']="$(to-match 'fcdn.stream')"
-
-function get-url() {
-  BASE_URL="$1"
-  DENY_LIST="${2:-''}"
-
-  LINKS="$(curl -sL "$BASE_URL" | pup '[data-video] attr{data-video}')"
-
-  FCND_STREAM_URL="$(echo "$LINKS" | grep "${URLS['fcdn.stream']}")"
-  MP4UPLOAD_COM_URL="$(echo "$LINKS" | grep "${URLS['mp4upload']}")"
-
-  if [ ! -z "$MP4UPLOAD_COM_URL" ] && doesnt-contain "${DENY_LIST[@]}" "${URLS['mp4upload']}"; then
-    SCRIPT_DATA="$(
-      curl -sL "$MP4UPLOAD_COM_URL" |
-        pup 'script[type="text/javascript"]:contains("eval(function(p,a,c,k,e,d)") text{}' |
-        sed -e 's/^[[:space:]]*//' |
-        cut -c 5-
-    )"
-
-    if [ -z "$SCRIPT_DATA" ]; then
-      get-url "$BASE_URL" "${URLS['mp4upload']} $DENY_LIST"
-    fi
-
-    SCRIPT_PARSED="$(node -e "console.log($SCRIPT_DATA)")"
-
-    URL="$(echo "$SCRIPT_PARSED" | perl -nle 'm/player.src\("([^"]+)"\)/; print $1')"
-
-    echo "$URL"
-  elif [ ! -z "$FCND_STREAM_URL" ] && doesnt-contain "${DENY_LIST[@]}" "${URLS['fcdn.stream']}"; then
-    ID="$(
-      echo "$FCND_STREAM_URL" |
-        url-info |
-        jq -r '.[0] | .path' |
-        cut -d'/' -f3
-    )"
-
-    URL="$(
-      curl \
-        --referer "$FCND_STREAM_URL" \
-        -X 'POST' \
-        -d'r=&d=fcnd.stream' \
-        -sL "https://fcdn.stream/api/source/$ID" |
-        jq -r '.data | sort_by(.label[:-1] | tonumber) | reverse | .[0].file'
-    )"
-
-    if [ -z "$URL" ]; then
-      get-url "$BASE_URL" "${URLS['fcdn.stream']} $DENY_LIST"
-    fi
-
-    echo "$URL"
-  else
-    return -1
-  fi
-}
-
-URL="$(get-url "$1")"
-
-if [ $? -ne 0 ]; then
-  exit -1
-fi
-
-if [ "1" -eq "$DO_ECHO" ]; then
-  echo "$URL"
-else
-  youtube-dl --referer "$1" "$URL"
-fi
