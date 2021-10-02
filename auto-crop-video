@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -Eeuxo pipefail
+
+INPUT_FILE="$1"
+
+FILENAME="$(basename -- "$INPUT_FILE")"
+EXTENSION="${FILENAME##*.}"
+FILENAME="${FILENAME%.*}"
+
+OUTPUT_FILE="$FILENAME.ac.$EXTENSION"
+
+CUT_FILTER="$(ffmpeg -i "$INPUT_FILE" -vf cropdetect -f null - 2>&1 | awk '/crop/ { print $NF }' | sort | uniq -c | sort -nr | rev | cut -d' ' -f1 | rev | head -n1)"
+
+ffmpeg -y -i "$INPUT_FILE" -vf "$CUT_FILTER" -map_metadata -1 "$OUTPUT_FILE"
+
+touch -r "$INPUT_FILE" "$OUTPUT_FILE"
+
+kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
