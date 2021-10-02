@@ -38,48 +38,6 @@ class Chalk:
     italic = '3m'
 
 
-parser = argparse.ArgumentParser(
-    description="Download videos from pantsubase.tv",
-    usage="%(prog)s -n 'series-name-here' [options]",
-)
-
-parser.add_argument(
-    "series",
-    help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
-    type=str,
-    nargs='?',
-)
-
-parser.add_argument(
-    "-n, --series-name",
-    help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
-    type=str,
-    nargs='?',
-    dest="series_name",
-)
-
-parser.add_argument(
-    "-e, --episode",
-    help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
-    type=int,
-    nargs='?',
-    required=False,
-    default=None,
-    dest="episode",
-)
-
-parser.add_argument(
-    "-f, --number-format",
-    help="String format on how to name files. Defaults to: %02d",
-    type=str,
-    required=False,
-    default="%02d",
-    dest="number_format",
-)
-
-argv = parser.parse_args()
-
-
 def write(*text):
     out = ''.join(text)
     sys.stdout.write(out)
@@ -151,7 +109,7 @@ def log_success(*text: str) -> str:
     )
 
 
-def get_episode_number_to_download() -> int:
+def get_episode_number_to_download(argv) -> int:
     if argv.episode:
         return argv.episode
 
@@ -275,8 +233,49 @@ def get_video_url(download_url: str) -> VideoUrl:
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Download videos from pantsubase.tv",
+        usage="%(prog)s -n 'series-name-here' [options]",
+    )
+
+    parser.add_argument(
+        "series",
+        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+        type=str,
+        nargs='?',
+    )
+
+    parser.add_argument(
+        "-n, --series-name",
+        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+        type=str,
+        nargs='?',
+        dest="series_name",
+    )
+
+    parser.add_argument(
+        "-e, --episode",
+        help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
+        type=int,
+        nargs='?',
+        required=False,
+        default=None,
+        dest="episode",
+    )
+
+    parser.add_argument(
+        "-f, --number-format",
+        help="String format on how to name files. Defaults to: %02d",
+        type=str,
+        required=False,
+        default="%02d",
+        dest="number_format",
+    )
+
+    argv = parser.parse_args()
+
     series_name = argv.series_name or argv.series
-    episode_number = get_episode_number_to_download()
+    episode_number = get_episode_number_to_download(argv)
     number_format = argv.number_format
 
     if series_name is None:
