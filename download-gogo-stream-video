@@ -1,33 +1,219 @@
-#!/usr/bin/env -S deno run --quiet --allow-all --unstable
+#!/usr/bin/env python3
+import argparse
+from typing import Callable, Dict, List, Tuple, Union
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+from bs4.element import Tag
+import requests
+import os
+import re
 
-import {
-  $,
-} from 'https://deno.land/x/deno_dx@0.2.0/mod.ts';
-import yargs from 'https://deno.land/x/yargs@v17.0.1-deno/deno.ts';
-import { getDownloadLink } from './scripts/gogo-stream.ts';
 
-const argv =
-  yargs(Deno.args)
-    .usage('Usage: download-gogo-stream-video $GOGO_STREAM_URL')
+def run_js(payload: str) -> str:
+    runtimes = requests.get("https://emkc.org/api/v2/piston/runtimes").json()
+    runtime = next(
+        (
+            x
+            for x in runtimes
+            if "runtime" in x and x["runtime"] == "node"
+        ),
+        None,
+    )
 
-    .alias('e', 'echo')
-    .nargs('e', 0)
-    .boolean('e')
-    .describe('e', 'If set returns the URL instead of downloading it')
+    response = requests.post(
+        url="https://emkc.org/api/v2/piston/execute",
+        json={
+            "language": "js",
+            "version": runtime["version"],
+            "files": [
+                {
+                    "content": payload,
+                },
+            ],
+        },
+    ).json()
 
-    // @ts-ignore: For some reason it exists but isn't picked up
-    .argv
-  ;
+    return response["run"]["stdout"]
 
-const [gogoStreamUrl] = argv._;
-const url = await getDownloadLink(gogoStreamUrl);
 
-if (!url) {
-  Deno.exit(1);
+def get_download_sites_urls(gogostream_url: str) -> List[str]:
+    response = requests.get(gogostream_url)
+    if not response:
+        return []
+    page_html = response.text
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    return [
+        tag["data-video"]
+        for
+        tag
+        in soup.find_all(lambda tag: tag.has_attr("data-video"), class_="linkserver")
+        if tag["data-video"]
+    ]
+
+
+HandlerFuncReturn = Dict[str, Tuple[str, str]]
+
+
+def handle__streamani_net(url: str) -> HandlerFuncReturn:
+    pass
+
+
+def handle__goload_one(url: str) -> HandlerFuncReturn:
+    cmd = os.popen(f"""
+        curl -sL '{url}' |
+          pup --color 'script:contains("https://")' |
+          grep 'sources:' |
+          sed -E 's/^[[:space:]]+sources\://g'
+    """)
+    sources = cmd.read().replace("\n", ",")
+    cmd.close()
+
+    payload = f"const s = [{sources}].flat(); process.stdout.write(s[0].file);"
+    return (run_js(payload), url)
+
+
+def handle__sbplay_one(url: str) -> HandlerFuncReturn:
+    code = url.replace(".html", "").split("/")[-1].split("-", maxsplit=1)[-1]
+    player_url = f"https://sbplay.one/play/{code}?auto=1"
+    cmd = os.popen(f"""
+        curl -sL '{player_url}' |
+          pup --color 'script:contains("https://")' |
+          grep 'sources:' |
+          sed -E 's/^[[:space:]]+sources\://g'
+    """)
+    sources = cmd.read().strip().replace("\n", ",")
+    cmd.close()
+
+    payload = f"const s = [{sources}].flat(); process.stdout.write(s[0].file);"
+
+    return (run_js(payload), player_url)
+
+
+def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
+    page_html = requests.get(url, headers={
+        "User-Agent": "Gogo stream video downloader"
+    }).text
+
+    script_data = BeautifulSoup(page_html, "html.parser").find(
+        lambda tag: tag.name == "script" and "MDCore.ref" in str(tag.string)).string.strip()
+
+    payload = f"const MDCore = {{}}; {script_data}; process.stdout.write(`https:${{MDCore.wurl}}`);"
+
+    return (run_js(payload), url)
+
+
+def handle__embedsito_com(url: str) -> HandlerFuncReturn:
+    api_id = url.split("/")[-1]
+    resp = requests.post(
+        f"https://embedsito.com/api/source/{api_id}",
+        headers={
+            "accept": "*/*",
+            "accept-language": "en-GB,en;q=0.9,hr;q=0.8,de;q=0.7",
+            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "x-requested-with": "XMLHttpRequest",
+            "referer": url,
+        },
+        data="r=&d=embedsito.com"
+    ).json()['data']
+
+    return (
+        sorted(
+            resp,
+            key=lambda k: int(k["label"][:-1]),
+            reverse=True,
+        )[0]["file"],
+        url,
+    )
+
+
+def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
+    page_html = requests.get(url).text
+    packed_script = BeautifulSoup(page_html, 'html.parser').find(
+        lambda tag: tag.name == "script" and "function(p,a,c,k,e,d)" in str(tag.string)).string
+
+    payload = f"""
+    const fn = {packed_script[4:]}
+    console.log(fn.toString());
+    """
+    r = run_js(payload)
+
+    # Better: video_url = re.match(r'player\.src\("([^"]+)"\)', r)
+    video_url = next(x for x in r.split("player.")
+                     if x.startswith('src("')).strip()[5:-3]
+
+    return (video_url, url)
+
+
+handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
+    # dood.la is behind cloudflare
+    # streamtape.net ????
+
+    "www.mp4upload.com": handle__www_mp4upload_com,
+    "streamani.net": handle__streamani_net,
+    "goload.one": handle__goload_one,
+    "sbplay.one": handle__sbplay_one,
+    "mixdrop.co": handle__mixdrop_co,
+    "embedsito.com": handle__embedsito_com,
 }
 
-if (argv.echo) {
-  await Deno.stdout.write(new TextEncoder().encode(url));
-} else {
-  await $`youtube-dl --referer '${gogoStreamUrl}' '${url}'`
-}
+
+def get_download_url(url) -> Union[Tuple[str, str], None]:
+    urls = get_download_sites_urls(url)
+    url_map = {}
+    for url in urls:
+        parsed = urlparse(url)
+        url_map[parsed.netloc] = url
+
+    for key in handlers:
+        if key not in url_map:
+            continue
+
+        try:
+            return handlers[key](url_map[key])
+        except Exception:
+            continue
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Download videos from gogo-stream.com",
+        usage="%(prog)s [options] $GOGO_STREAM_URL",
+    )
+
+    parser.add_argument(
+        "url",
+        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+        type=str,
+        nargs=1,
+    )
+
+    parser.add_argument(
+        "-e", "--echo",
+        help="If set returns the URL instead of downloading it",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        dest="echo",
+    )
+
+    argv = parser.parse_args()
+
+    gogostream_url = argv.url[0]
+    should_just_echo = argv.echo
+
+    download_info = get_download_url(url=gogostream_url)
+    if download_info is None:
+        exit(1)
+
+    (url, referer) = download_info
+
+    if should_just_echo:
+        print(url, end="")
+    else:
+        os.system(
+            f"yt-dlp --referer '{referer}' --downloader aria2c --downloader-args '-x 16' '{url}'")
+
+
+if __name__ == "__main__":
+    main()
