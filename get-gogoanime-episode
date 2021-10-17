@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+
+import argparse
+from dataclasses import dataclass
+import os
+import re
+import subprocess
+import sys
+from typing import Dict, Generator, Iterable, List, Tuple, TypeVar, Union
+from bs4 import BeautifulSoup
+from bs4.element import ResultSet, Tag
+import requests
+import urllib.parse
+
+T = TypeVar("T")
+
+
+def flatten(coll: Iterable[T]) -> Generator[T, None, None]:
+    for i in coll:
+        if isinstance(i, Iterable) and not isinstance(i, str):
+            for subc in flatten(i):
+                yield subc
+        else:
+            yield i
+
+
+class Chalk:
+    bg_blue_bright = '104m'
+    bg_yellow_bright = '103m'
+    bg_red = '41m'
+    bg_green = '42m'
+
+    dim = '2m'
+    black = '30m'
+    white = '37m'
+
+    bold = '1m'
+    italic = '3m'
+
+
+def write(*text):
+    out = ''.join(text)
+    sys.stdout.write(out)
+    return out
+
+
+def esc(string):
+    return f'\x1B[{string}'
+
+
+def move_up(lines):
+    return write(esc(f'{lines}A'), '\r')
+
+
+def clear_line():
+    return esc('K')
+
+
+def log(*text):
+    return write(
+        clear_line(),
+        *text,
+        '\r\n',
+    )
+
+
+def log_and_return(text):
+    lines = str(text).split("\n")
+    lines_written = len(lines)
+    for line in lines:
+        log(line)
+    move_up(lines_written)
+
+
+def to_format(*colours: list[str]) -> str:
+    return ''.join([esc(c) for c in flatten(colours)])
+
+
+def dim(text: str) -> str:
+    return to_format(Chalk.italic, Chalk.dim) + text + esc("0m")
+
+
+def badge(text: str, *colours: list[str]) -> str:
+    return f"{to_format(colours)} {text} {esc('0m')}"
+
+
+def log_dim(text: str, *, return_line: bool = False) -> str:
+    t = dim(text)
+
+    if return_line:
+        return log_and_return(t)
+    else:
+        return log(t)
+
+
+def log_error(*text: list[str]) -> str:
+    return log(
+        badge('✘', Chalk.bold, Chalk.white, Chalk.bg_red),
+        " ",
+        *text
+    )
+
+
+def log_success(*text: str) -> str:
+    return log(
+        badge('✔', Chalk.bold, Chalk.white, Chalk.bg_green),
+        " ",
+        *text
+    )
+
+
+def get_anime_id(anime_name: str) -> Union[str, None]:
+    log_dim("Fetching episode page...", return_line=True)
+    response = requests.get(
+        f"https://gogoanime.vc/category/{anime_name}",
+    )
+
+    if not response.status_code:
+        log_dim("Anime not found")
+        return None
+
+    page_html = response.text
+
+    log_dim("Parsing HTML...", return_line=True)
+    return BeautifulSoup(
+        page_html,
+        'html.parser',
+    ).find(
+        id="movie_id",
+    ).attrs["value"]
+
+
+def get_anime_episode_list(anime_id: str) -> Dict[int, str]:
+    log_dim("Fetching episode list...", return_line=True)
+    response = requests.get(
+        f"https://ajax.gogo-load.com/ajax/load-list-episode?ep_start=0&ep_end=99999999&id={anime_id}"
+    )
+
+    if not response.status_code:
+        log_dim("No episodes found")
+        return {}
+
+    page_html = response.text
+
+    log_dim("Parsing HTML...", return_line=True)
+    elements = BeautifulSoup(
+        page_html,
+        'html.parser',
+    ).find_all(
+        "a",
+    )
+
+    ret = {}
+    for ep in elements:
+        ep_number = int(ep.find(class_='name').text.split(" ")[1])
+        ep_url = ep.attrs['href'].strip()
+
+        ret[ep_number] = ep_url
+
+    return ret
+
+
+def get_anime_episode_download_server_list(episode_url: str) -> Dict[str, str]:
+    response = requests.get(
+        f"https://gogoanime.vc{episode_url}"
+    )
+
+    if not response.status_code:
+        log_dim("No episodes found")
+        return None
+
+    page_html = response.text
+
+    elements: ResultSet = BeautifulSoup(
+        page_html,
+        'html.parser',
+    ).find(
+        class_="anime_muti_link",
+    ).find_all(
+        "a"
+    )
+
+    def fix_url(url: Union[str, None]) -> Union[str, None]:
+        if not url:
+            return None
+
+        if re.compile(r'^https?://').match(url):
+            return url
+
+        if str(url).startswith('//'):
+            return f"https:{url}"
+
+        log(f"Unknown url format: `{url}'")
+
+        return None
+
+    ret = {}
+    for element in elements:
+        site_name = next(element.stripped_strings)
+        site_url = fix_url(element.attrs["data-video"])
+
+        ret[site_name] = site_url
+
+    return ret
+
+
+@dataclass
+class VideoUrl:
+    url: str
+    referer: Union[str, None] = None
+
+
+def get_video_url(download_url: str) -> VideoUrl:
+    url_info = urllib.parse.urlparse(download_url)
+    hostname = url_info.netloc
+
+    log_dim(f"Trying `{hostname}`", return_line=True)
+
+    def handle__ani_googledrive_stream():
+        url = os.popen(f"youtube-dl --get-url '{download_url}'").read().strip()
+
+        return VideoUrl(url=url)
+
+    def handle__play_api_web_site():
+        request = requests.post(
+            "https://play.api-web.site/src.php",
+            data={
+                "id": urllib.parse.parse_qs(url_info.query)["id"],
+            },
+        )
+
+        if not request.status_code:
+            log_dim("No data from `play.api-web.site`")
+            return None
+
+        urls = request.json()["url"]
+        sorted_urls = sorted(urls, key=lambda x: x["size"], reverse=True)
+
+        url = sorted_urls[0]["src"]
+
+        return VideoUrl(url=url)
+
+    def handle__gogo_stream_com():
+        gogo_stream = __import__("download-gogo-stream-video")
+        url, referer = gogo_stream.get_download_url(download_url)
+
+        return VideoUrl(url=url, referer=referer)
+
+    handlers = {
+        "ani.googledrive.stream": handle__ani_googledrive_stream,
+        "play.api-web.site": handle__play_api_web_site,
+        "gogo-stream.com": handle__gogo_stream_com,
+        "goload.one": handle__gogo_stream_com,
+    }
+
+    if hostname not in handlers:
+        log_dim(f"Could not extract link for `{hostname}`")
+        raise Exception("No handler")
+
+    return handlers[hostname]()
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Download videos from pantsubase.tv",
+        usage="%(prog)s -n 'series-name-here' [options]",
+    )
+
+    parser.add_argument(
+        "series",
+        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+        type=str,
+        nargs='?',
+    )
+
+    parser.add_argument(
+        "-n, --series-name",
+        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
+        type=str,
+        nargs='?',
+        dest="series_name",
+    )
+
+    parser.add_argument(
+        "-e, --episode",
+        help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
+        type=int,
+        nargs='?',
+        required=False,
+        default=None,
+        dest="episode",
+    )
+
+    parser.add_argument(
+        "-f, --number-format",
+        help="String format on how to name files. Defaults to: %02d",
+        type=str,
+        required=False,
+        default="%02d",
+        dest="number_format",
+    )
+
+    return parser.parse_args()
+
+
+def get_episode_number_to_download(argv) -> int:
+    if argv.episode:
+        return argv.episode
+
+    last_episode_number = os.popen(
+        "ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1"
+    ).read()
+
+    return int(last_episode_number or 0) + 1
+
+
+def main():
+    argv = parse_arguments()
+
+    series_name = argv.series_name or argv.series
+    number_format = argv.number_format
+
+    if series_name is None:
+        raise Exception("No series name")
+
+    episode_number = get_episode_number_to_download(argv)
+
+    log(f'Downloading {badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+
+    anime_id = get_anime_id(series_name)
+    if anime_id is None:
+        log_error(f"Can't fetch page for `{series_name}'")
+        exit(1)
+
+    episodes = get_anime_episode_list(anime_id)
+    if episode_number not in episodes:
+        log_error(f"Episode {episode_number} can't be found")
+        exit(1)
+
+    download_sites = get_anime_episode_download_server_list(
+        episodes[episode_number],
+    )
+
+    processed = 0
+    for site in download_sites:
+        processed += 1
+        download_url = download_sites[site]
+        try:
+            download_info = get_video_url(download_url)
+            url = download_info.url
+            referer = download_info.referer or url
+
+            log(f"{to_format(Chalk.italic)}Downloading from {site}{to_format('23m')}")
+
+            download_cmd = [
+                "yt-dlp",
+                "--no-warnings",
+                "--no-check-certificate",
+                "--concurrent-fragments", "16",
+                "--referer", referer,
+                "--output", f"{number_format % (episode_number)}.mp4",
+                url,
+            ]
+            download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
+
+            with subprocess.Popen(
+                download_cmd,
+                stdout=subprocess.PIPE,
+                bufsize=1,
+                text=True,
+            ) as proc:
+                for line in proc.stdout:
+                    if not download_line.search(line):
+                        continue
+                    status = line.split(" ", maxsplit=1)[1].strip()
+                    log_dim(status, return_line=True)
+
+                if proc.wait() != 0:
+                    print(subprocess.list2cmdline(download_cmd))
+                    raise Exception("Something broke")
+        except Exception as e:
+            if str(e) == "No handler":
+                continue
+
+            print(("\n" + "=" * 32) * 2)
+            print(e)
+            print(("=" * 32 + "\n") * 2)
+
+        for _ in range(processed):
+            write(clear_line())
+            move_up(1)
+        log_success(f"Episode {episode_number} downloaded")
+        exit()
+
+    write(clear_line())
+    move_up(processed)
+    log_error(f"Failed to download episode {episode_number}")
+    exit(1)
+
+
+if __name__ == "__main__":
+    main()
