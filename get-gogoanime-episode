@@ -251,6 +251,7 @@ def get_video_url(download_url: str) -> VideoUrl:
         "play.api-web.site": handle__play_api_web_site,
         "gogo-stream.com": handle__gogo_stream_com,
         "goload.one": handle__gogo_stream_com,
+        "gogoplay1.com": handle__gogo_stream_com,
     }
 
     if hostname not in handlers:
