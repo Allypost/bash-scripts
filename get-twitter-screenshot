@@ -2,8 +2,4 @@
 
 TWITTER_URL="$1"
 
-curl -sL 'https://htmlcsstoimage.com/demo_run' \
-  -H 'content-type: application/json' \
-  --data-raw '{"html":"<blockquote class=\"twitter-tweet\" style=\"width: 400px;\" data-dnt=\"true\">\n<p lang=\"en\" dir=\"ltr\"></p>\n\n<a href=\"'"$TWITTER_URL"'\"></a>\n\n</blockquote><script async src=\"https://platform.twitter.com/widgets.js\" charset=\"utf-8\"></script>","console_mode":"","url":"","css":"","selector":".twitter-tweet","ms_delay":"1500","render_when_ready":"false","viewport_height":"","viewport_width":"","google_fonts":"","device_scale":""}' \
-  --compressed |
-  jq -r '.url'
+echo "https://twitter.gpa.fi/$TWITTER_URL"
