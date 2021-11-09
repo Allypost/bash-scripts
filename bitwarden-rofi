@@ -22,7 +22,7 @@ function display_rofi() {
 }
 
 function rofi_config() {
-  _message="Alt+a - Sync | Alt+p - password | Alt+u - username $message"
+  _message="Alt+a - Sync | Alt+t - type username + password | Alt+p - password | Alt+u - username $message"
   message=''
   rofi \
     -i \
@@ -50,7 +50,20 @@ function rofi_config() {
     -kb-custom-19 'Alt+a' \
     -kb-custom-11 'Alt+p' \
     -kb-custom-12 'Alt+u' \
+    -kb-custom-13 'Alt+t' \
     $@
+}
+
+function do-type() {
+  read -r data
+
+  echo "$data" | xargs xdotool type --clearmodifiers
+}
+
+function do-copy() {
+  read -r data
+
+  echo "$data" | xclip -sel clip
 }
 
 function handle_rofi_type() {
@@ -58,6 +71,7 @@ function handle_rofi_type() {
   field="$2"
   method="$3"
 
+  sleep 0.1
   data=""
   case "$field" in
   "username")
@@ -71,14 +85,12 @@ function handle_rofi_type() {
 
   case "$method" in
   "type")
-    echo "$data" | xargs xdotool type --clearmodifiers
+    echo "$data" | do-type
     ;;
   "copy")
-    echo "$data" | xclip -sel clip
+    echo "$data" | do-copy
     ;;
   esac
-
-  exit
 }
 
 rbw unlock || exit 2
@@ -93,9 +105,17 @@ while true; do
   case "$exit_code" in
   0 | 20)
     handle_rofi_type "$chosen" "password" "type"
+    exit
     ;;
   21)
     handle_rofi_type "$chosen" "username" "type"
+    exit
+    ;;
+  22)
+    handle_rofi_type "$chosen" "username" "type"
+    xdotool key --clearmodifiers Tab;
+    handle_rofi_type "$chosen" "password" "type"
+    exit
     ;;
   28)
     rbw sync
