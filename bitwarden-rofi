@@ -22,7 +22,7 @@ function display_rofi() {
 }
 
 function rofi_config() {
-  _message="Alt+a - Sync | Alt+t - type username + password | Alt+p - password | Alt+u - username $message"
+  _message="Alt+a - Sync | Alt+t - type username + password | Alt+p - copy password | Alt+u - copy username $message"
   message=''
   rofi \
     -i \
@@ -104,11 +104,11 @@ while true; do
 
   case "$exit_code" in
   0 | 20)
-    handle_rofi_type "$chosen" "password" "type"
+    handle_rofi_type "$chosen" "password" "copy"
     exit
     ;;
   21)
-    handle_rofi_type "$chosen" "username" "type"
+    handle_rofi_type "$chosen" "username" "copy"
     exit
     ;;
   22)
