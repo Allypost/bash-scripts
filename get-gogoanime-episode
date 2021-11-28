@@ -208,7 +208,7 @@ def main():
                 "yt-dlp",
                 "--no-warnings",
                 "--no-check-certificate",
-                "--concurrent-fragments", "8",
+                "--concurrent-fragments", "16",
                 "--retries", "infinite",
                 "--referer", referer,
                 "--output", f"{number_format % (episode_number)}.mp4",
