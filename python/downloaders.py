@@ -23,20 +23,82 @@ def handle__streamani_net(url: str) -> HandlerFuncReturn:
 
 
 def handle__sbplay_one(url: str) -> HandlerFuncReturn:
-    code = url.replace(".html", "").split("/")[-1].split("-", maxsplit=1)[-1]
-    player_url = f"https://sbplay.one/play/{code}?auto=1"
-    cmd = os.popen(f"""
-        curl -sL '{player_url}' |
-          pup --color 'script:contains("https://")' |
-          grep 'sources:' |
-          sed -E 's/^[[:space:]]+sources\://g'
-    """)
-    sources = cmd.read().strip().replace("\n", ",")
-    cmd.close()
+    download_page = url.replace("/e/", "/d/")
+    page_html = cloudscraper\
+        .create_scraper()\
+        .get(
+            download_page,
+            headers={
+                "User-Agent": "Gogo stream video downloader"
+            },
+        )\
+        .text
 
-    payload = f"const s = [{sources}].flat(); process.stdout.write(s[0].file);"
+    download_links = BeautifulSoup(page_html, "html.parser")\
+        .find(class_="contentbox")\
+        .find("table")\
+        .find_all("td")
 
-    return DownloadInfo(url=run_js(payload), referer=player_url)
+    @dataclass
+    class Info:
+        id: str
+        mode: str
+        hash: str
+
+    def fix_pair(pair):
+        link_, info_ = pair
+
+        file_id, mode, file_hash = link_\
+            .find("a")["onclick"]\
+            .replace("download_video", "")[1:-1]\
+            .replace("'", "")\
+            .split(",")
+
+        w, h = info_\
+            .text\
+            .strip()\
+            .split(',')[0]\
+            .split('x')
+
+        return (
+            Info(
+                id=file_id,
+                mode=mode,
+                hash=file_hash,
+            ),
+            (
+                int(w),
+                int(h),
+            ),
+        )
+
+    info = sorted(
+        [
+            fix_pair(download_links[i:i+2])
+            for i
+            in range(0, len(download_links), 2)
+        ],
+        key=lambda x: x[1],
+        reverse=True,
+    )[0][0]
+
+    download_generator_url = f"https://sbplay.one/dl?op=download_orig&id={info.id}&mode={info.mode}&hash={info.hash}"
+
+    page_html = cloudscraper\
+        .create_scraper()\
+        .get(
+            download_generator_url,
+            headers={
+                "User-Agent": "Gogo stream video downloader"
+            },
+        )\
+        .text
+
+    download_link = BeautifulSoup(page_html, "html.parser")\
+        .find(class_="contentbox")\
+        .find("a")["href"]
+
+    return DownloadInfo(url=download_link, referer=download_generator_url)
 
 
 def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
