@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, List, Union
 from bs4 import BeautifulSoup
 import urllib.parse
 from urllib.parse import urlparse
@@ -176,20 +176,21 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "ani.googledrive.stream": handle__ani_googledrive_stream,
     "streamani.net": handle__streamani_net,
     "sbplay.one": handle__sbplay_one,
-    "gogoplay1.com": handle__gogoplay1_com,
     "embedsito.com": handle__embedsito_com,
     "www.mp4upload.com": handle__www_mp4upload_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
+    "gogoplay1.com": handle__gogoplay1_com,
 }
 
 aliases: Dict[str, str] = {
     "gogo-stream.com": "gogoplay1.com",
     "goload.one": "gogoplay1.com",
+    "sbplay1.com": "sbplay.one",
 }
 
 
-def get_download_info(url) -> Union[None, HandlerFuncReturn]:
+def get_download_info(url: str) -> Union[None, HandlerFuncReturn]:
     parsed = urlparse(url)
     domain = parsed.netloc
 
@@ -205,3 +206,24 @@ def get_download_info(url) -> Union[None, HandlerFuncReturn]:
         return handlers[domain](url)
     except Exception:
         return None
+
+
+def sort_download_links(urls: List[str]) -> List[str]:
+    handler_names = list(handlers.keys())
+
+    def get_key(url: str) -> int:
+        parsed = urlparse(url)
+        domain = parsed.netloc
+
+        if domain in aliases:
+            domain = aliases[domain]
+
+        if domain in handler_names:
+            return handler_names.index(domain)
+
+        return len(handler_names) + 1
+
+    return list(sorted(
+        urls,
+        key=get_key,
+    ))
