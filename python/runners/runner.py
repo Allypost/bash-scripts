@@ -1,3 +1,4 @@
+import json
 import requests
 
 
@@ -13,9 +14,14 @@ def run_code(language: str, version: str, code: str) -> str:
                 },
             ],
         },
-    ).json()
+    )
 
-    return response["run"]["stdout"]
+    resp = response.json()
+
+    if "run" not in resp:
+        raise Exception("Something went wrong while running the code")
+
+    return response.json()["run"]
 
 
 def get_runtimes():
