@@ -8,7 +8,7 @@ FILENAME="$(basename -- "$INPUT_FILE")"
 EXTENSION="${FILENAME##*.}"
 FILENAME="${FILENAME%.*}"
 
-OUTPUT_FILE="$FILENAME.ac.$EXTENSION"
+OUTPUT_FILE="$(dirname -- "$INPUT_FILE")/$FILENAME.ac.$EXTENSION"
 
 CUT_FILTER="$(ffmpeg -i "$INPUT_FILE" -vf cropdetect -f null - 2>&1 | awk '/crop/ { print $NF }' | sort | uniq -c | sort -nr | rev | cut -d' ' -f1 | rev | head -n1)"
 
