@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from bs4.element import ResultSet
 import requests
 
-from python.downloaders import get_download_info
+from python.downloaders import get_download_info, sort_download_links
 from python.log.console import Console, Chalk
 
 
@@ -189,6 +189,19 @@ def main():
     download_sites = get_anime_episode_download_server_list(
         episodes[episode_number],
     )
+
+    download_urls_to_site_name = {
+        v: k
+        for k, v
+        in download_sites.items()
+    }
+
+    sorted_download_sites = sort_download_links(download_sites.values())
+    download_sites = {
+        download_urls_to_site_name[site_url]: site_url
+        for site_url
+        in sorted_download_sites
+    }
 
     processed = 0
     for site in download_sites:
