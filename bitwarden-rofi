@@ -103,7 +103,10 @@ while true; do
   chosen="$(echo "$chosen" | sed --regexp-extended "s|.*?\t\[id\: (.+?)\]$|\1|")"
 
   case "$exit_code" in
-  0 | 20)
+  0)
+    handle_rofi_type "$chosen" "password" "type"
+    ;;
+  20)
     handle_rofi_type "$chosen" "password" "copy"
     exit
     ;;
