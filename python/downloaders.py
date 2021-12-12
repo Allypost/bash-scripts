@@ -2,7 +2,7 @@ import os
 from typing import Callable, Dict, List, Union
 from bs4 import BeautifulSoup
 import urllib.parse
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from dataclasses import dataclass
 import cloudscraper
 
@@ -220,13 +220,38 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
         resp = run_js(payload)
         return DownloadInfo(url=resp, referer=url)
 
+    def get_download_link(url: str) -> HandlerFuncReturn:
+        response = cloudscraper.create_scraper().get(url)
+        if not response:
+            return None
+        page_html = response.text
+        soup = BeautifulSoup(page_html, "html.parser")
+        download_links = [
+            (
+                int(link.text.split('\n')[1].strip()[1:-1].split(" - ")[0][:-1]),
+                link["href"],
+            )
+            for link
+            in soup.find_all(lambda tag: tag.has_attr("download"))
+        ]
+        download_links = sorted(download_links, key=lambda x: x[0], reverse=True)
+
+        return DownloadInfo(url=download_links[0][1], referer=url)
+
     parsed = urllib.parse.urlparse(url)
     url_path = parsed.path
+    query = urllib.parse.parse_qs(parsed.query)
 
+    if "id" in query:
+        url_id = query["id"][0]
+        return get_download_link(parsed._replace(path="/download", query=f"id={url_id}").geturl())
+    
     if url_path == '/streaming.php':
         return get_embedded_players(url)
     elif url_path == '/embedplus':
         return get_video_urls(url)
+    elif url_path == '/download':
+        return get_download_link(url)
     else:
         return None
 
@@ -235,14 +260,14 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     # dood.la is behind cloudflare
     # streamtape.net ????
 
+    "gogoplay1.com": handle__gogoplay1_com,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
     "streamani.net": handle__streamani_net,
     "sbplay.one": handle__sbplay_one,
     "embedsito.com": handle__embedsito_com,
-    "www.mp4upload.com": handle__www_mp4upload_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    "gogoplay1.com": handle__gogoplay1_com,
+    "www.mp4upload.com": handle__www_mp4upload_com,
 }
 
 aliases: Dict[str, str] = {
