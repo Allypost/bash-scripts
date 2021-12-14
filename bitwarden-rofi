@@ -105,6 +105,7 @@ while true; do
   case "$exit_code" in
   0)
     handle_rofi_type "$chosen" "password" "type"
+    exit
     ;;
   20)
     handle_rofi_type "$chosen" "password" "copy"
