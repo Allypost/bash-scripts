@@ -16,4 +16,9 @@ FINAL_DURATION=$(echo "$DURATION - $TRIM_DURATION" | bc)
 
 ffmpeg -i "$INPUT_FILE" -preset veryslow -to "$FINAL_DURATION" "$OUTPUT_FILE"
 touch -r "$INPUT_FILE" "$OUTPUT_FILE"
-kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
+
+if command -v kioclient5 &>/dev/null; then
+  kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
+elif command -v trash-put &>/dev/null; then
+  trash-put "$INPUT_FILE"
+fi

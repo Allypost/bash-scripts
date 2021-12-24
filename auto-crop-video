@@ -16,4 +16,8 @@ ffmpeg -y -i "$INPUT_FILE" -vf "$CUT_FILTER" -map_metadata -1 "$OUTPUT_FILE"
 
 touch -r "$INPUT_FILE" "$OUTPUT_FILE"
 
-kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
+if command -v kioclient5 &>/dev/null; then
+  kioclient5 move "$INPUT_FILE" trash:/ 2>/dev/null
+elif command -v trash-put &>/dev/null; then
+  trash-put "$INPUT_FILE"
+fi

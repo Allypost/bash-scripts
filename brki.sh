@@ -67,7 +67,11 @@ for filepath in "${FILES[@]}"; do
 
     if [ -f "$newFull" ]; then
         if [ -f "$oldFull" ]; then
-            kioclient5 move "$newFull" trash:/ 2>/dev/null
+            if command -v kioclient5 &>/dev/null; then
+                kioclient5 move "$newFull" trash:/ 2>/dev/null
+            elif command -v trash-put &>/dev/null; then
+                trash-put "$newFull"
+            fi
         fi
     fi
 
