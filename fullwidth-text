@@ -1,61 +1,24 @@
-#!/usr/bin/env node
-const { stdin } = process;
+#!/usr/bin/env python
+import sys
+import os
 
-const isASCII =
-    (c) =>
-        33 <= c
-        && c <= 126
-    ;
+wide_chars = {
+    i: i + 0xFEE0
+    for i
+    in range(0x21, 0x7F)
+}
+wide_chars[0x20] = 0x3000
 
-const fromASCII =
-    (chars) =>
-        chars
-            .split('')
-            .map((char) => {
-                let c = char.charCodeAt(0);
 
-                if (c === 32) {
-                    c = 12288;
-                }
+def widen_text(text: str) -> str:
+    return text.translate(wide_chars)
 
-                if (isASCII(c)) {
-                    c += 2 ** 16 - 288;
-                }
 
-                return String.fromCharCode(c);
-            })
-            .join('')
-    ;
+if __name__ == "__main__":
+    wide_text = widen_text(' '.join(sys.argv[1:]))
 
-const readLine = 
-    () => {
-        let result = '';
+    if not os.isatty(0):
+        wide_text += widen_text(sys.stdin.read())
+        wide_text += widen_text(" ")
 
-        return new Promise((resolve) => {
-            if (stdin.isTTY) {
-                resolve(result);
-                return;
-            }
-
-            stdin.setEncoding('utf8');
-
-            stdin.on('readable', () => {
-                let chunk;
-
-                while ((chunk = stdin.read())) {
-                    result += chunk;
-                }
-            });
-
-            stdin.on('end', () => {
-                resolve(result);
-            });
-        }).then((result) => result.replace(/\n$/, ''));
-    };
-
-(async () => {
-    const input = process.argv.slice(2).join(' ') || await readLine();
-
-    process.stdout.write(fromASCII(input));
-})()
-
+    sys.stdout.write(wide_text.strip())
