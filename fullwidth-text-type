@@ -20,5 +20,12 @@ FULLWIDTH_OUTPUT="$(
 		$HOME/.scripts/fullwidth-text
 )"
 if [ ! -z $FULLWIDTH_OUTPUT ]; then
-	echo -n "$FULLWIDTH_OUTPUT" | xargs xdotool type
+	OLD_CLIPBOARD_CONTENTS="$(xclip -o -selection clipboard)"
+	CAN_RESTORE_CLIPBOARD=$?
+
+	echo -n "$FULLWIDTH_OUTPUT" | xclip -selection clipboard && xdotool key --clearmodifiers 'Control_L+V'
+
+	if [ $CAN_RESTORE_CLIPBOARD -eq 0 ]; then
+		echo -n "$OLD_CLIPBOARD_CONTENTS" | xclip -selection clipboard
+	fi
 fi
