@@ -111,7 +111,12 @@ def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
 
     payload = f"const MDCore = {{}}; {script_data}; process.stdout.write(`https:${{MDCore.wurl}}`);"
 
-    return DownloadInfo(url=run_js(payload), referer=url)
+    download_url = run_js(payload)
+
+    if download_url == "https:undefined":
+        return None
+
+    return DownloadInfo(url=download_url, referer=url)
 
 
 def handle__embedsito_com(url: str) -> HandlerFuncReturn:
