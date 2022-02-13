@@ -251,7 +251,7 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
     if "id" in query:
         url_id = query["id"][0]
         return get_download_link(parsed._replace(path="/download", query=f"id={url_id}").geturl())
-    
+
     if url_path == '/streaming.php':
         return get_embedded_players(url)
     elif url_path == '/embedplus':
@@ -333,12 +333,12 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "dood.ws": handle__dood_ws,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
     "streamani.net": handle__streamani_net,
-    "sbplay.one": handle__sbplay_one,
+    # "sbplay.one": handle__sbplay_one,
     "www.mp4upload.com": handle__www_mp4upload_com,
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    "gogoplay1.com": handle__gogoplay1_com,
+    # "gogoplay1.com": handle__gogoplay1_com,
 }
 
 aliases: Dict[str, str] = {
