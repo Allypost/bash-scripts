@@ -238,7 +238,7 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
                 link["href"],
             )
             for link
-            in soup.find_all(lambda tag: tag.has_attr("download"))
+            in soup.find_all(lambda tag: tag.has_attr("dowload"))
         ]
         download_links = sorted(download_links, key=lambda x: x[0], reverse=True)
 
