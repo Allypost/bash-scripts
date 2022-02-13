@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Callable, Dict, List, Union
 from bs4 import BeautifulSoup
 import urllib.parse
@@ -261,24 +262,92 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
         return None
 
 
+def handle__dood_ws(url: str) -> HandlerFuncReturn:
+    response = cloudscraper.create_scraper().get(url)
+    if not response:
+        return None
+    page_html = response.text
+
+    something_url = re.search(
+        r"\$.get\('/pass_md5/([^']+)", page_html, re.IGNORECASE)
+    if not something_url:
+        return None
+    something_url = f"https://dood.ws/pass_md5/{something_url.group(1)}"
+
+    response = cloudscraper.create_scraper().get(
+        something_url,
+        headers={
+            "User-Agent": "Gogo stream video downloader",
+            "Referer": url,
+        },
+    )
+    if not response:
+        return None
+
+    return DownloadInfo(
+        url=response.text,
+        referer=url,
+    )
+
+
+def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
+    file_id = url.split("/")[-1]
+    response = cloudscraper.create_scraper().post(
+        f"https://fembed-hd.com/api/source/{file_id}",
+        data={
+            "r": "",
+            "d": "fembed-hd.com",
+        },
+        headers={
+            "User-Agent": "Gogo stream video downloader",
+            "Referer": url,
+            "x-requested-with": "XMLHttpRequest",
+        },
+    )
+
+    if not response:
+        return None
+
+    data = response.json()
+    files = sorted([
+        [
+            int(x['label'][:-1]),
+            x['file'],
+        ]
+        for x
+        in data['data']
+    ], key=lambda x: x[0])
+
+    best_file = files[-1][1]
+
+    return DownloadInfo(
+        url=best_file,
+        referer=url,
+    )
+
+
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
-    # dood.la is behind cloudflare
     # streamtape.net ????
 
-    "gogoplay1.com": handle__gogoplay1_com,
+    "fembed-hd.com": handle__fembed_hd_com,
+    "dood.ws": handle__dood_ws,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
     "streamani.net": handle__streamani_net,
     "sbplay.one": handle__sbplay_one,
+    "www.mp4upload.com": handle__www_mp4upload_com,
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    "www.mp4upload.com": handle__www_mp4upload_com,
+    "gogoplay1.com": handle__gogoplay1_com,
 }
 
 aliases: Dict[str, str] = {
     "gogo-stream.com": "gogoplay1.com",
     "goload.one": "gogoplay1.com",
+    "gogoplay.io": "gogoplay1.com",
     "sbplay1.com": "sbplay.one",
+    "sbplay2.com": "sbplay.one",
+    "dood.la": "dood.ws",
 }
 
 
