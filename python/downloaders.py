@@ -1,11 +1,13 @@
+import json
 import os
 import re
 from typing import Callable, Dict, List, Union
 from bs4 import BeautifulSoup
 import urllib.parse
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 from dataclasses import dataclass
 import cloudscraper
+import os
 
 from .runners.js import run_js
 
@@ -190,74 +192,145 @@ def handle__play_api_web_site(url: str) -> HandlerFuncReturn:
 
 
 def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
-    def get_embedded_players(url: str) -> HandlerFuncReturn:
+    def get_embedplus_data(url: str) -> HandlerFuncReturn:
         response = cloudscraper.create_scraper().get(url)
         if not response:
             return None
         page_html = response.text
-        soup = BeautifulSoup(page_html, "html.parser")
 
-        urls = [
-            tag["data-video"]
-            for
-            tag
-            in soup.find_all(lambda tag: tag.has_attr("data-video"), class_="linkserver")
-            if tag["data-video"]
-        ]
+        page = BeautifulSoup(page_html, 'html.parser')
 
-        for site_url in urls:
-            download_info = get_download_info(site_url)
-            if download_info is not None:
-                return download_info
+        attr_script_ts = page.find(
+            'script',
+            attrs={"data-name": "ts"}
+        ).attrs['data-value']
+        attr_script_crypto = page.find(
+            'script',
+            attrs={"data-name": "crypto"}
+        ).attrs['data-value']
+        attr_crypto = page.find(
+            attrs={"name": "crypto"}
+        ).attrs['content']
 
-        return None
+        current_file_path = os.path.dirname(os.path.realpath(__file__))
+        lib_path = os.path.join(
+            current_file_path,
+            "runners",
+            "libraries",
+            "js",
+            "crypto-js.min.js",
+        )
 
-    def get_video_urls(url: str) -> HandlerFuncReturn:
-        cmd = os.popen(f"""
-            curl -sL '{url}' |
-            pup 'script:contains("https://")' |
-            grep 'sources:' |
-            sed -E 's/^[[:space:]]+sources\://g'
-        """)
-        sources = cmd.read().replace("\n", ",")
-        cmd.close()
+        with open(lib_path) as f:
+            lib_contents = f.read()
 
-        payload = f"const s = [{sources}].flat(); process.stdout.write(s[0].file);"
-        resp = run_js(payload)
-        return DownloadInfo(url=resp, referer=url)
+        result = run_js(
+            f"""
+                const CryptoJS = require('./crypto');
 
-    def get_download_link(url: str) -> HandlerFuncReturn:
-        response = cloudscraper.create_scraper().get(url)
+                function getRandomInt(min, max) {{
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                }}
+                function f_random(len) {{
+                    var curLen = len, dorrien = "";
+                    while (curLen > 0) {{
+                        curLen--;
+                        dorrien += getRandomInt(0, 9);
+                    }}
+                    return dorrien;
+                }}
+
+                var
+                    attr_script_ts = {json.dumps(attr_script_ts)},
+                    attr_script_crypto = {json.dumps(attr_script_crypto)},
+                    attr_crypto = {json.dumps(attr_crypto)}
+                    ;
+                var
+                    breh = CryptoJS.enc.Utf8.stringify(
+                    CryptoJS.AES.decrypt(
+                        attr_script_crypto,
+                        CryptoJS.enc.Utf8.parse(attr_script_ts + "" + attr_script_ts),
+                        {{
+                            iv: CryptoJS.enc.Utf8.parse(attr_script_ts)
+                        }},
+                    ),
+                    ),
+                    aniella = CryptoJS.AES.decrypt(
+                    attr_crypto,
+                    CryptoJS.enc.Utf8.parse(breh),
+                    {{
+                        iv: CryptoJS.enc.Utf8.parse(attr_script_ts),
+                    }},
+                    ),
+                    piya = CryptoJS.enc.Utf8.stringify(aniella),
+                    set = piya.substr(0, piya.indexOf("&")),
+                    sarahann = f_random(16)
+                    ;
+
+                process.stdout.write(
+                    "/encrypt-ajax.php?id="
+                    + CryptoJS.AES.encrypt(
+                    set,
+                    CryptoJS.enc.Utf8.parse(breh),
+                    {{
+                        iv: CryptoJS.enc.Utf8.parse(sarahann)
+                    }}
+                    ).toString()
+                    + piya.substr(piya.indexOf("&"))
+                    + '&time='
+                    + f_random(2)
+                    + sarahann
+                    + f_random(2)
+                );
+            """,
+            files=[
+                {
+                    "name": "crypto.js",
+                    "content": lib_contents,
+                },
+            ],
+        )
+
+        parsed = urllib.parse.urlparse(url)
+        api_url = f"{parsed.scheme}://{parsed.netloc}{result}"
+
+        response = cloudscraper.create_scraper().get(
+            api_url,
+            headers={
+                "User-Agent": "Gogo stream video downloader",
+                "Referer": url,
+                "x-requested-with": "XMLHttpRequest",
+            },
+        )
+
         if not response:
             return None
-        page_html = response.text
-        soup = BeautifulSoup(page_html, "html.parser")
-        download_links = [
-            (
-                int(link.text.split('\n')[1].strip()[1:-1].split(" - ")[0][:-1]),
-                link["href"],
-            )
-            for link
-            in soup.find_all(lambda tag: tag.has_attr("dowload"))
-        ]
-        download_links = sorted(download_links, key=lambda x: x[0], reverse=True)
 
-        return DownloadInfo(url=download_links[0][1], referer=url)
+        api_response = response.json()
+
+        sources = sorted(
+            [
+                [
+                    int(source['label'][:-2]),
+                    source['file'],
+                ]
+                for source
+                in api_response['source']
+                if source['label'][-1] == 'P'
+            ],
+            key=lambda x: x[0],
+        )
+
+        return DownloadInfo(
+            url=sources[-1][1],
+            referer=url,
+        )
 
     parsed = urllib.parse.urlparse(url)
     url_path = parsed.path
-    query = urllib.parse.parse_qs(parsed.query)
 
-    if "id" in query:
-        url_id = query["id"][0]
-        return get_download_link(parsed._replace(path="/download", query=f"id={url_id}").geturl())
-
-    if url_path == '/streaming.php':
-        return get_embedded_players(url)
-    elif url_path == '/embedplus':
-        return get_video_urls(url)
-    elif url_path == '/download':
-        return get_download_link(url)
+    if url_path == "/embedplus" or url_path == "/streaming.php":
+        return get_embedplus_data(url)
     else:
         return None
 
@@ -329,6 +402,7 @@ def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     # streamtape.net ????
 
+    "gogoplay1.com": handle__gogoplay1_com,
     "fembed-hd.com": handle__fembed_hd_com,
     "dood.ws": handle__dood_ws,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
@@ -338,7 +412,6 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    # "gogoplay1.com": handle__gogoplay1_com,
 }
 
 aliases: Dict[str, str] = {
