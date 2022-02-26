@@ -3,17 +3,17 @@
 import os
 import subprocess
 import argparse
-from typing import Union
+from typing import Dict, Union
 import requests
 import re
 import urllib.parse
 from bs4 import BeautifulSoup
 
-from python.downloaders import DownloadInfo, get_download_info
+from python.downloaders import DownloadInfo, get_download_info, sort_download_links
 from python.log.console import Console, Chalk
 
 
-def get_episode_number_to_download(argv) -> int:
+def get_episode_number_to_download(argv) -> float:
     if argv.episode:
         return argv.episode
 
@@ -21,7 +21,7 @@ def get_episode_number_to_download(argv) -> int:
         "ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1"
     ).read()
 
-    return int(last_episode_number or 0) + 1
+    return float(last_episode_number or 0) + 1
 
 
 def get_download_urls(episode_url: str) -> list[str]:
@@ -79,6 +79,38 @@ def get_download_urls(episode_url: str) -> list[str]:
         for url
         in urls
     ])))
+
+
+def get_anime_episode_list(series_name: str) -> Dict[float, str]:
+    Console.log_dim("Fetching episode list...", return_line=True)
+    response = requests.get(
+        f"https://pantsubase.tv/anime/{series_name}"
+    )
+
+    if not response.status_code:
+        Console.log_dim("No episodes found")
+        return {}
+
+    page_html = response.text
+
+    Console.log_dim("Parsing HTML...", return_line=True)
+    elements = BeautifulSoup(
+        page_html,
+        'html.parser',
+    ).select(
+        ".episode a",
+    )
+
+    ret = {}
+    for ep in elements:
+        ep_str = ep.find(class_='name').text.split(" ")[1]
+        ep_number = float(ep_str)
+        ep_url = ep.attrs['href'].strip()
+
+        ret[ep_number] = ep_url
+
+    return ret
+
 
 def get_video_url(download_url: str) -> DownloadInfo:
     url_info = urllib.parse.urlparse(download_url)
@@ -144,14 +176,24 @@ def main():
     if series_name is None:
         raise Exception("No series name")
 
-    episode_url = f'https://pantsubase.tv/watch/{series_name}-episode-{episode_number}'
+    episodes = get_anime_episode_list(series_name)
 
-    Console.log(f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+    if episode_number not in episodes:
+        Console.log_error(f"Episode {episode_number} can't be found")
+        exit(1)
 
-    download_urls = get_download_urls(episode_url)
+    Console.log(
+        f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+
+    download_urls = get_download_urls(
+        episodes[episode_number],
+    )
+    download_urls = sort_download_links(
+        download_urls,
+    )
 
     if (len(download_urls) <= 0):
-        Console.log_error(f"Episode {episode_number} can't be found")
+        Console.log_error(f"Episode {episode_number} can't be downloaded")
         exit(1)
 
     processed = 0
@@ -165,7 +207,8 @@ def main():
 
             hostname = urllib.parse.urlparse(download_url).netloc
 
-            Console.log(f"{Chalk.colour(Chalk.italic)}Downloading from {hostname}{Chalk.colour('23m')}")
+            Console.log(
+                f"{Chalk.colour(Chalk.italic)}Downloading from {hostname}{Chalk.colour('23m')}")
 
             download_cmd = [
                 "yt-dlp",
