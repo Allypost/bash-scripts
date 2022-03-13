@@ -200,17 +200,12 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
 
         page = BeautifulSoup(page_html, 'html.parser')
 
-        attr_script_ts = page.find(
-            'script',
-            attrs={"data-name": "ts"}
-        ).attrs['data-value']
+        attr_script_crypto_a = '25716538522938396164662278833288'
+        attr_script_crypto_b = '1285672383939852'
         attr_script_crypto = page.find(
             'script',
             attrs={"data-name": "crypto"}
         ).attrs['data-value']
-        attr_crypto = page.find(
-            attrs={"name": "crypto"}
-        ).attrs['content']
 
         current_file_path = os.path.dirname(os.path.realpath(__file__))
         lib_path = os.path.join(
@@ -228,59 +223,26 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
             f"""
                 const CryptoJS = require('./crypto');
 
-                function getRandomInt(min, max) {{
-                    return Math.floor(Math.random() * (max - min + 1)) + min;
-                }}
-                function f_random(len) {{
-                    var curLen = len, dorrien = "";
-                    while (curLen > 0) {{
-                        curLen--;
-                        dorrien += getRandomInt(0, 9);
-                    }}
-                    return dorrien;
-                }}
+                const attr_script_crypto_a = {json.dumps(attr_script_crypto_a)};
+                const attr_script_crypto_b = {json.dumps(attr_script_crypto_b)};
+                const attr_script_crypto = {json.dumps(attr_script_crypto)};
 
-                var
-                    attr_script_ts = {json.dumps(attr_script_ts)},
-                    attr_script_crypto = {json.dumps(attr_script_crypto)},
-                    attr_crypto = {json.dumps(attr_crypto)}
-                    ;
-                var
-                    breh = CryptoJS.enc.Utf8.stringify(
-                    CryptoJS.AES.decrypt(
-                        attr_script_crypto,
-                        CryptoJS.enc.Utf8.parse(attr_script_ts + "" + attr_script_ts),
-                        {{
-                            iv: CryptoJS.enc.Utf8.parse(attr_script_ts)
-                        }},
-                    ),
-                    ),
-                    aniella = CryptoJS.AES.decrypt(
-                    attr_crypto,
-                    CryptoJS.enc.Utf8.parse(breh),
-                    {{
-                        iv: CryptoJS.enc.Utf8.parse(attr_script_ts),
-                    }},
-                    ),
-                    piya = CryptoJS.enc.Utf8.stringify(aniella),
-                    set = piya.substr(0, piya.indexOf("&")),
-                    sarahann = f_random(16)
-                    ;
+                const candon = 
+                    CryptoJS['AES']['decrypt'](attr_script_crypto, CryptoJS['enc']['Utf8'].parse(attr_script_crypto_a), {{
+                        iv: CryptoJS.enc['Utf8']['parse'](attr_script_crypto_b)
+                    }})
+                ;
+                const elver = CryptoJS['enc']['Utf8']['stringify'](candon);
+                const dandrell = elver.substr(0, elver.indexOf("&"));
 
                 process.stdout.write(
-                    "/encrypt-ajax.php?id="
-                    + CryptoJS.AES.encrypt(
-                    set,
-                    CryptoJS.enc.Utf8.parse(breh),
-                    {{
-                        iv: CryptoJS.enc.Utf8.parse(sarahann)
-                    }}
-                    ).toString()
-                    + piya.substr(piya.indexOf("&"))
-                    + '&time='
-                    + f_random(2)
-                    + sarahann
-                    + f_random(2)
+                    '/encrypt-ajax.php?id=' + CryptoJS.AES['encrypt'](
+                        dandrell,
+                        CryptoJS.enc.Utf8['parse'](attr_script_crypto_a),
+                        {{
+                            iv: CryptoJS['enc']['Utf8'].parse(attr_script_crypto_b)
+                        }}
+                    )['toString']() + elver.substr(elver['indexOf']("&")) + '&alias=' + dandrell
                 );
             """,
             files=[
@@ -308,10 +270,44 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
 
         api_response = response.json()
 
+        result = run_js(
+            f"""
+                const CryptoJS = require('./crypto');
+
+                const attr_script_crypto_a = {json.dumps(attr_script_crypto_a)};
+                const attr_script_crypto_b = {json.dumps(attr_script_crypto_b)};
+
+                const resp = {json.dumps(api_response)};
+
+                process.stdout.write(
+                    CryptoJS.enc.Utf8.stringify(
+                        CryptoJS['AES'].decrypt(
+                            resp['data'],
+                            CryptoJS['enc'].Utf8['parse'](attr_script_crypto_a),
+                            {{
+                                iv: CryptoJS['enc']['Utf8']['parse'](attr_script_crypto_b)
+                            }},
+                        ),
+                    ),
+                );
+            """,
+            files=[
+                {
+                    "name": "crypto.js",
+                    "content": lib_contents,
+                },
+            ],
+        )
+
+        if not result:
+            return None
+
+        api_response = json.loads(result)
+
         sources = sorted(
             [
                 [
-                    int(source['label'][:-2]),
+                    int(source['label'][:-2]) if source['label'][:-2].isdigit() else 0,
                     source['file'],
                 ]
                 for source
