@@ -151,7 +151,7 @@ def main():
     parser.add_argument(
         "-e, --episode",
         help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
-        type=int,
+        type=float,
         nargs='?',
         required=False,
         default=None,

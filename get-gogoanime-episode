@@ -135,7 +135,7 @@ def parse_arguments():
     parser.add_argument(
         "-e, --episode",
         help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
-        type=int,
+        type=float,
         nargs='?',
         required=False,
         default=None,
@@ -154,7 +154,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_episode_number_to_download(argv) -> int:
+def get_episode_number_to_download(argv) -> float:
     if argv.episode:
         return argv.episode
 
@@ -162,7 +162,7 @@ def get_episode_number_to_download(argv) -> int:
         "ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1"
     ).read()
 
-    return int(last_episode_number or 0) + 1
+    return float(last_episode_number or 0) + 1
 
 
 def main():
