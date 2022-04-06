@@ -200,11 +200,11 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
 
         page = BeautifulSoup(page_html, 'html.parser')
 
-        attr_script_crypto_a = '25716538522938396164662278833288'
-        attr_script_crypto_b = '1285672383939852'
+        attr_script_crypto_a = '63976882873559819639988080820907'
+        attr_script_crypto_b = '4770478969418267'
         attr_script_crypto = page.find(
             'script',
-            attrs={"data-name": "crypto"}
+            attrs={"data-name": "episode"}
         ).attrs['data-value']
 
         current_file_path = os.path.dirname(os.path.realpath(__file__))
