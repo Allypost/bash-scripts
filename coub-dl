@@ -3,16 +3,16 @@
 set -e
 
 echo "Fetching video id..."
-VIDEO_ID="$(youtube-dl --get-id "$1")"
+VIDEO_ID="$(yt-dlp --cookies-from-browser chrome --get-id "$1")"
 
 # Download video
-youtube-dl --ignore-errors --prefer-ffmpeg --recode-video mp4 --embed-thumbnail --add-metadata -f 'html5-video-high' -o "$VIDEO_ID.mp4" "$1"
+yt-dlp --cookies-from-browser chrome --ignore-errors --prefer-ffmpeg --recode-video mp4 --embed-thumbnail --add-metadata -f 'html5-video-high' -o "$VIDEO_ID.mp4" "$1"
 
 # Get video duration
 AUDIO_DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -sexagesimal "$VIDEO_ID.mp4")"
 
 # Download audio and trim to duration
-youtube-dl --ignore-errors --prefer-ffmpeg -f 'html5-audio-high' -o "$VIDEO_ID.mp3" "$1"
+yt-dlp --cookies-from-browser chrome --ignore-errors --prefer-ffmpeg -f 'html5-audio-high' -o "$VIDEO_ID.mp3" "$1"
 
 # Merge video and audio
 ffmpeg -i "$VIDEO_ID.mp4" -i "$VIDEO_ID.mp3" -c:v copy -c:a copy -to "$AUDIO_DURATION" "$VIDEO_ID.c.mp4"

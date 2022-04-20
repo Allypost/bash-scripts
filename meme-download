@@ -45,7 +45,7 @@ fi
   mkdir -p "$MEME_DIR"
   cd "$MEME_DIR"
 
-  youtube-dl -o "$OUTPUT_TEMPLATE" --user-agent "$USER_AGENT" --exec 'touch {} && memfix {}' "$URL"
+  yt-dlp --cookies-from-browser chrome -o "$OUTPUT_TEMPLATE" --user-agent "$USER_AGENT" --exec 'touch {} && memfix {}' "$URL"
 
   FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
 

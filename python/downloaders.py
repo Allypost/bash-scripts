@@ -165,7 +165,7 @@ def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__ani_googledrive_stream(url: str) -> HandlerFuncReturn:
-    download_url = os.popen(f"youtube-dl --get-url '{url}'").read().strip()
+    download_url = os.popen(f"yt-dlp --get-url '{url}'").read().strip()
 
     return DownloadInfo(url=download_url, referer=url)
 
