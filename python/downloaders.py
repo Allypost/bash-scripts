@@ -200,8 +200,22 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
 
         page = BeautifulSoup(page_html, 'html.parser')
 
-        attr_script_crypto_a = '63976882873559819639988080820907'
-        attr_script_crypto_b = '4770478969418267'
+        attr_script_crypto_a = page.find('body')['class'][0].split('-')[1]
+        attr_script_crypto_b = page.find(
+            lambda tag:
+            tag.name == 'div'
+            and 'class' in tag.attrs
+            and 'wrapper' in tag.attrs['class']
+            and [x for x in tag.attrs['class'] if x.startswith('container-')]
+        )['class']
+        attr_script_crypto_b = [x for x in attr_script_crypto_b if x.startswith('container-')][0].split('-')[1]
+        attr_script_crypto_c = page.find(
+            lambda tag:
+            tag.name == 'div'
+            and 'class' in tag.attrs
+            and [x for x in tag.attrs['class'] if x.startswith('videocontent-')]
+        )['class']
+        attr_script_crypto_c = [x for x in attr_script_crypto_c if x.startswith('videocontent-')][0].split('-')[1]
         attr_script_crypto = page.find(
             'script',
             attrs={"data-name": "episode"}
@@ -274,8 +288,8 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
             f"""
                 const CryptoJS = require('./crypto');
 
-                const attr_script_crypto_a = {json.dumps(attr_script_crypto_a)};
                 const attr_script_crypto_b = {json.dumps(attr_script_crypto_b)};
+                const attr_script_crypto_c = {json.dumps(attr_script_crypto_c)};
 
                 const resp = {json.dumps(api_response)};
 
@@ -283,7 +297,7 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
                     CryptoJS.enc.Utf8.stringify(
                         CryptoJS['AES'].decrypt(
                             resp['data'],
-                            CryptoJS['enc'].Utf8['parse'](attr_script_crypto_a),
+                            CryptoJS['enc'].Utf8['parse'](attr_script_crypto_c),
                             {{
                                 iv: CryptoJS['enc']['Utf8']['parse'](attr_script_crypto_b)
                             }},
@@ -416,6 +430,7 @@ aliases: Dict[str, str] = {
     "gogoplay.io": "gogoplay1.com",
     "gogoplay4.com": "gogoplay1.com",
     "gogoplay5.com": "gogoplay1.com",
+    "goload.pro": "gogoplay1.com",
     "sbplay1.com": "sbplay.one",
     "sbplay2.com": "sbplay.one",
     "sbplay2.xyz": "sbplay.one",
