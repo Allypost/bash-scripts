@@ -492,11 +492,18 @@ def get_download_info(url: str) -> Union[None, HandlerFuncReturn]:
         return None
 
 
-def sort_download_links(urls: List[str]) -> List[str]:
+T = TypeVar("T")
+
+
+def sort_download_links(
+    urls: List[T],
+    *,
+    to_url: Callable[[T], str] = lambda x: x,
+) -> List[str]:
     handler_names = list(handlers.keys())
 
-    def get_key(url: str) -> int:
-        parsed = urlparse(url)
+    def get_key(item: T) -> int:
+        parsed = urlparse(to_url(item))
         domain = parsed.netloc
 
         if domain in aliases:
