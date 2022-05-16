@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, TypeVar, Union
 from bs4 import BeautifulSoup
 import urllib.parse
 from urllib.parse import urlparse
@@ -409,9 +409,43 @@ def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
     )
 
 
-handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
-    # streamtape.net ????
+def handle__streamtape_net(url: str) -> HandlerFuncReturn:
+    response = cloudscraper.create_scraper().get(
+        url,
+        headers={
+            "User-Agent": "StreamTape video downloader",
+            "Referer": url,
+        },
+    )
 
+    if not response:
+        return None
+
+    page_html = response.text
+
+    script_tag = BeautifulSoup(page_html, "html.parser").find(
+        lambda tag: tag.name == "script" and "document.getElementById('robotlink')" in str(
+            tag.string)
+    ).string.strip()
+
+    encoded_url = re.search(
+        r'document\.getElementById\(\'robotlink\'\)\.innerHTML\s*=\s*([^;]+)',
+        script_tag,
+    ).group(1)
+
+    payload = f"const url = {encoded_url}; process.stdout.write(url);"
+
+    download_url = run_js(payload)
+    if download_url.startswith('//'):
+        download_url = f"https:{download_url}"
+
+    return DownloadInfo(
+        url=download_url,
+        referer=url,
+    )
+
+
+handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "gogoplay1.com": handle__gogoplay1_com,
     "fembed-hd.com": handle__fembed_hd_com,
     "dood.ws": handle__dood_ws,
@@ -422,6 +456,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
+    "streamtape.net": handle__streamtape_net,
 }
 
 aliases: Dict[str, str] = {
@@ -435,6 +470,7 @@ aliases: Dict[str, str] = {
     "sbplay2.com": "sbplay.one",
     "sbplay2.xyz": "sbplay.one",
     "dood.la": "dood.ws",
+    "streamtape.com": "streamtape.net",
 }
 
 
