@@ -445,6 +445,51 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
     )
 
 
+def handle__watchsb_com(url: str) -> HandlerFuncReturn:
+    item_id = url.split('/')[-1].split('.html')[0]
+
+    payload = f'const ID = "{item_id}";' + """
+    const clientSide = {
+        makeid() {
+            return Math.random().toString(36).substring(2);
+        }
+    };
+
+    const encode = (encVar) => {
+        encVar = `${clientSide.makeid(12)}||${encVar}||${clientSide.makeid(12)}||streamsb`;
+        var ret = '';
+        var spleet = encVar.split('');
+        for (let i = 0; i < encVar.length; i++) {
+            ret += parseInt(spleet[i].charCodeAt(0), 10).toString(16);
+        }
+        return ret;
+    };
+
+    process.stdout.write(`https://watchsb.com/sources43/${encode(ID)}/${encode(encode(clientSide.makeid(12)))}`);
+    """
+
+    api_url = run_js(payload)
+
+    response = cloudscraper.create_scraper().get(
+        api_url,
+        headers={
+            "User-Agent": "StreamTape video downloader",
+            "Referer": url,
+            "watchsb": "streamsb",
+        },
+    )
+
+    if not response.status_code:
+        return None
+
+    data = response.json()
+
+    return DownloadInfo(
+        url=data["stream_data"]["file"],
+        referer=url,
+    )
+
+
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "gogoplay1.com": handle__gogoplay1_com,
     "fembed-hd.com": handle__fembed_hd_com,
@@ -456,6 +501,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
+    "watchsb.com": handle__watchsb_com,
     "streamtape.net": handle__streamtape_net,
 }
 
