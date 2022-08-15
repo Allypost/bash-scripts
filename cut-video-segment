@@ -6,11 +6,12 @@ read fromTime
 printf "End time: "
 read toTime
 
-filename="$(basename -- "$1")"
+filename="$(basename -- "$inputFile")"
 extension="${filename##*.}"
 filename="${filename%.*}"
+dir_name="$(dirname "$inputFile")"
 
-partNo="$(find . -maxdepth 1 -name "$filename.*.mp4" | cut -d'.' -f3 | sort -rn | head -n1)"
+partNo="$(find "$dir_name/" -maxdepth 1 -name "$filename.*.mp4" | rev | cut -d '.' -f-2 | rev | cut -d '.' -f1 | sort -rn | head -n1)"
 if [[ -z "$partNo" ]]; then
     partNo="0"
 fi
