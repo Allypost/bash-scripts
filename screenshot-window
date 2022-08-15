@@ -29,7 +29,7 @@ function take-screenshot() {
     --format png \
     --quality 10 \
     --hidecursor |
-    convert - \( +clone -background black -shadow 57x15+0+13 \) +swap -background none -layers merge +repage - |
+#    convert - \( +clone -background black -shadow 57x15+0+13 \) +swap -background none -layers merge +repage - |
     xclip \
       -selection clipboard \
       -t image/png
