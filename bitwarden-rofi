@@ -22,7 +22,7 @@ function display_rofi() {
 }
 
 function rofi_config() {
-  _message="Alt+a - Sync | Alt+t - type username + password | Alt+p - copy password | Alt+u - copy username $message"
+  _message="Alt+a - Sync | Alt+t - type username + password | Alt+p - copy password | Alt+u - copy username | Alt+k - type code $message"
   message=''
   rofi \
     -i \
@@ -51,6 +51,7 @@ function rofi_config() {
     -kb-custom-11 'Alt+p' \
     -kb-custom-12 'Alt+u' \
     -kb-custom-13 'Alt+t' \
+    -kb-custom-14 'Alt+k' \
     $@
 }
 
@@ -80,6 +81,10 @@ function handle_rofi_type() {
 
   "password")
     data="$(rbw get "$id")"
+    ;;
+
+  "code")
+    data="$(rbw code "$id")"
     ;;
   esac
 
@@ -119,6 +124,10 @@ while true; do
     handle_rofi_type "$chosen" "username" "type"
     xdotool key --clearmodifiers Tab;
     handle_rofi_type "$chosen" "password" "type"
+    exit
+    ;;
+  23)
+    handle_rofi_type "$chosen" "code" "type"
     exit
     ;;
   28)
