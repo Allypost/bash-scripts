@@ -2,4 +2,4 @@
 
 TWITTER_URL="$1"
 
-echo "https://twitter.gpa.fi/$TWITTER_URL"
+echo "https://twitter.igr.ec/$TWITTER_URL"
