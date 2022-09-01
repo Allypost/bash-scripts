@@ -501,7 +501,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    "watchsb.com": handle__watchsb_com,
+    # "watchsb.com": handle__watchsb_com,
     "streamtape.net": handle__streamtape_net,
 }
 
