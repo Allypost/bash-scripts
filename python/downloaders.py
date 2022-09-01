@@ -507,6 +507,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
 
 aliases: Dict[str, str] = {
     "gogo-stream.com": "gogoplay1.com",
+    "goload.io": "gogoplay1.com",
     "goload.one": "gogoplay1.com",
     "gogoplay.io": "gogoplay1.com",
     "gogoplay4.com": "gogoplay1.com",
@@ -516,7 +517,10 @@ aliases: Dict[str, str] = {
     "sbplay2.com": "sbplay.one",
     "sbplay2.xyz": "sbplay.one",
     "dood.la": "dood.ws",
+    "dood.wf": "dood.ws",
     "streamtape.com": "streamtape.net",
+    "streamsss.net": "watchsb.com",
+    "fembed9hd.com": "fembed-hd.com",
 }
 
 
