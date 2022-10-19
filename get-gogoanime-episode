@@ -250,6 +250,12 @@ def main():
             if str(e) == "No handler":
                 continue
 
+            if str(e) == "Something broke":
+                Console.clear_line()
+                Console.log_error(
+                    f"Failed to download from {site}")
+                continue
+
             print(("\n" + "=" * 32) * 2)
             print(e)
             print(("=" * 32 + "\n") * 2)
