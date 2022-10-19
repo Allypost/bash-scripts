@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, TypeVar, Union
 from bs4 import BeautifulSoup
 import urllib.parse
 from urllib.parse import urlparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import cloudscraper
 import os
 
@@ -16,6 +16,7 @@ from .runners.js import run_js
 class DownloadInfo:
     url: str
     referer: Union[str, None] = None
+    headers: list[str] = field(default_factory=list)
 
 
 HandlerFuncReturn = Union[None, DownloadInfo]
@@ -413,7 +414,8 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
     response = cloudscraper.create_scraper().get(
         url,
         headers={
-            "User-Agent": "StreamTape video downloader",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
             "Referer": url,
         },
     )
@@ -486,7 +488,12 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
     return DownloadInfo(
         url=data["stream_data"]["file"],
-        referer=url,
+        referer="https://watchsb.com/",
+        headers=[
+            "Accept: */*",
+            "Origin: https://watchsb.com",
+            "User-Agent: StreamTape video downloader"
+        ],
     )
 
 
