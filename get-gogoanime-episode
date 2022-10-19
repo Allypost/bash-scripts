@@ -12,7 +12,7 @@ import requests
 from python.downloaders import get_download_info, sort_download_links
 from python.log.console import Console, Chalk
 
-BASE_URL="https://gogoanime.gg"
+BASE_URL = "https://gogoanime.tel"
 
 
 def get_anime_id(anime_name: str) -> Union[str, None]:
