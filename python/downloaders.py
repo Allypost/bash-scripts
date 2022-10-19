@@ -520,6 +520,7 @@ aliases: Dict[str, str] = {
     "gogoplay4.com": "gogoplay1.com",
     "gogoplay5.com": "gogoplay1.com",
     "goload.pro": "gogoplay1.com",
+    "gogohd.net": "gogoplay1.com",
     "sbplay1.com": "sbplay.one",
     "sbplay2.com": "sbplay.one",
     "sbplay2.xyz": "sbplay.one",
