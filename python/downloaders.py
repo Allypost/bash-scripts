@@ -9,6 +9,14 @@ from dataclasses import dataclass, field
 import cloudscraper
 import os
 
+try:
+    import playwright.sync_api
+except ImportError as err:
+    print("Installing playwright...")
+    assert(os.system("pip install playwright") == 0)
+    assert(os.system("playwright install firefox") == 0)
+from playwright.sync_api import sync_playwright
+
 from .runners.js import run_js
 
 
@@ -209,14 +217,16 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
             and 'wrapper' in tag.attrs['class']
             and [x for x in tag.attrs['class'] if x.startswith('container-')]
         )['class']
-        attr_script_crypto_b = [x for x in attr_script_crypto_b if x.startswith('container-')][0].split('-')[1]
+        attr_script_crypto_b = [x for x in attr_script_crypto_b if x.startswith(
+            'container-')][0].split('-')[1]
         attr_script_crypto_c = page.find(
             lambda tag:
             tag.name == 'div'
             and 'class' in tag.attrs
             and [x for x in tag.attrs['class'] if x.startswith('videocontent-')]
         )['class']
-        attr_script_crypto_c = [x for x in attr_script_crypto_c if x.startswith('videocontent-')][0].split('-')[1]
+        attr_script_crypto_c = [x for x in attr_script_crypto_c if x.startswith(
+            'videocontent-')][0].split('-')[1]
         attr_script_crypto = page.find(
             'script',
             attrs={"data-name": "episode"}
@@ -322,7 +332,8 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
         sources = sorted(
             [
                 [
-                    int(source['label'][:-2]) if source['label'][:-2].isdigit() else 0,
+                    int(source['label'][:-2]
+                        ) if source['label'][:-2].isdigit() else 0,
                     source['file'],
                 ]
                 for source
@@ -448,57 +459,56 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
 
 
 def handle__watchsb_com(url: str) -> HandlerFuncReturn:
-    item_id = url.split('/')[-1].split('.html')[0]
+    class RequestHandler:
+        m3u8_url = None
+        user_agent = None
+        accept_language = None
 
-    payload = f'const ID = "{item_id}";' + """
-    const clientSide = {
-        makeid() {
-            return Math.random().toString(36).substring(2);
-        }
-    };
+        def handle_request(self, req):
+            if self.m3u8_url is not None:
+                return
 
-    const encode = (encVar) => {
-        encVar = `${clientSide.makeid(12)}||${encVar}||${clientSide.makeid(12)}||streamsb`;
-        var ret = '';
-        var spleet = encVar.split('');
-        for (let i = 0; i < encVar.length; i++) {
-            ret += parseInt(spleet[i].charCodeAt(0), 10).toString(16);
-        }
-        return ret;
-    };
+            parsed = urllib.parse.urlparse(req.url)
+            is_video = parsed.path.endswith(".m3u8")
 
-    process.stdout.write(`https://watchsb.com/sources43/${encode(ID)}/${encode(encode(clientSide.makeid(12)))}`);
-    """
+            if not is_video:
+                return
 
-    api_url = run_js(payload)
+            self.m3u8_url = req.url
+            self.accept_language = req.headers.get("accept-language")
+            self.user_agent = req.headers.get("user-agent")
+            page.close()
 
-    response = cloudscraper.create_scraper().get(
-        api_url,
-        headers={
-            "User-Agent": "StreamTape video downloader",
-            "Referer": url,
-            "watchsb": "streamsb",
-        },
-    )
+    handler = RequestHandler()
 
-    if not response.status_code:
-        return None
+    with sync_playwright() as p:
+        browser = p.firefox.launch()
+        page = browser.new_page()
+        page.on("request", handler.handle_request)
+        while handler.m3u8_url is None:
+            try:
+                page.goto(url)
+                page.click('#mediaplayer [aria-label="Play"]', force=True)
+            except Exception:
+                pass
 
-    data = response.json()
+        browser.close()
 
     return DownloadInfo(
-        url=data["stream_data"]["file"],
+        url=handler.m3u8_url,
         referer="https://watchsb.com/",
         headers=[
             "Accept: */*",
+            f"Accept-Language: {handler.accept_language}",
             "Origin: https://watchsb.com",
-            "User-Agent: StreamTape video downloader"
+            f"User-Agent: {handler.user_agent}",
         ],
     )
 
 
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "gogoplay1.com": handle__gogoplay1_com,
+    "watchsb.com": handle__watchsb_com,
     "fembed-hd.com": handle__fembed_hd_com,
     "dood.ws": handle__dood_ws,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
@@ -508,7 +518,6 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "embedsito.com": handle__embedsito_com,
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
-    # "watchsb.com": handle__watchsb_com,
     "streamtape.net": handle__streamtape_net,
 }
 
