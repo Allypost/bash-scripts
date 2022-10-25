@@ -15,6 +15,7 @@ except ImportError as err:
     print("Installing playwright...")
     assert(os.system("pip install playwright") == 0)
     assert(os.system("playwright install firefox") == 0)
+import playwright.sync_api
 from playwright.sync_api import sync_playwright
 
 from .runners.js import run_js
@@ -481,18 +482,21 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
     handler = RequestHandler()
 
-    with sync_playwright() as p:
-        browser = p.firefox.launch()
-        page = browser.new_page()
-        page.on("request", handler.handle_request)
-        while handler.m3u8_url is None:
-            try:
-                page.goto(url)
-                page.click('#mediaplayer [aria-label="Play"]', force=True)
-            except Exception:
-                pass
+    try:
+        with sync_playwright() as p:
+            browser = p.firefox.launch()
+            page = browser.new_page()
+            page.on("request", handler.handle_request)
+            while handler.m3u8_url is None:
+                try:
+                    page.goto(url)
+                    page.click('#mediaplayer [aria-label="Play"]', force=True)
+                except Exception:
+                    pass
 
-        browser.close()
+            browser.close()
+    except playwright.sync_api.Error as err:
+        return None
 
     return DownloadInfo(
         url=handler.m3u8_url,
