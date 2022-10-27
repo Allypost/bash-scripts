@@ -5,8 +5,9 @@ function fetch {
 }
 
 URLS=(
-    'https://askldjaklsdjlkas.com'
-    'https://ip.kset.org'
+    'https://ip.kset.org/'
+    'https://checkip.amazonaws.com/'
+    'http://icanhazip.com/'
     'https://api.ipify.org/?format=text'
 )
 IP=""
