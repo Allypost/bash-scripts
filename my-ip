@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+function fetch {
+    curl -sL --fail "$1" 2>/dev/null || echo ""
+}
+
+URLS=(
+    'https://askldjaklsdjlkas.com'
+    'https://ip.kset.org'
+    'https://api.ipify.org/?format=text'
+)
+IP=""
+for URL in "${URLS[@]}"; do
+    IP="$(fetch "$URL")"
+    if [ ! -z "$IP" ]; then
+        break
+    fi
+done
+
+echo "$IP"
+
