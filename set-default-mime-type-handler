@@ -2,9 +2,8 @@
 
 MIME_DESKTOP_FILE="$1"
 
-APP_ID="$(basename $MIME_DESKTOP_FILE)"
+APP_ID="$(basename "$MIME_DESKTOP_FILE")"
 
 for MIME_TYPE in $(grep '^MimeType' "$MIME_DESKTOP_FILE" | cut -d = -f 2- | tr ';' ' '); do
-  xdg-mime default "$APP_ID" $MIME_TYPE
+  xdg-mime default "$APP_ID" "$MIME_TYPE"
 done
-

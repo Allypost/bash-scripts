@@ -30,7 +30,7 @@ if [ -z "$1" ]; then
 else
   URL="$1"
 fi
-TMP_FILE="/tmp/$(basename $0)_"
+TMP_FILE="/tmp/$(basename "$0")_"
 TMP_FILE_LENGTH="${#TMP_FILE}"
 TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
 USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
@@ -43,18 +43,18 @@ fi
   [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
 
   mkdir -p "$MEME_DIR"
-  cd "$MEME_DIR"
+  cd "$MEME_DIR" || exit
 
   yt-dlp --cookies-from-browser chrome -o "$OUTPUT_TEMPLATE" --user-agent "$USER_AGENT" --exec 'touch {} && memfix {}' "$URL"
 
   FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
 
-  if [[ $? -eq 0 && ! -z "$FILE_EXISTS" ]]; then
+  if [[ $? -eq 0 && -n "$FILE_EXISTS" ]]; then
     filename=$(basename -- "$FILE_EXISTS")
     extension="${filename##*.}"
     filename="${filename%.*}"
 
-    if [ $extension = 'unknown_video' ]; then
+    if [ "$extension" = 'unknown_video' ]; then
       proper_extension="$(file --extension "$FILE_EXISTS" | rev | cut -d':' -f1 | rev | cut -d'/' -f1 | awk '{$1=$1};1')"
       mv "$FILE_EXISTS" "$MEME_DIR/$filename.$proper_extension"
     fi

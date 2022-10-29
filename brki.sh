@@ -16,7 +16,7 @@ print_status_report() {
 print_status_success() {
     printf "\e[30;42m %s \e[0m" "$1"
     shift
-    if [ ! -z $1 ]; then
+    if [ -n "$1" ]; then
         printf " \e[4m%s\e[0m" "$*"
     fi
     printf "\n"
@@ -26,7 +26,7 @@ print_status_error() {
     printf "\e[1;101m %s \e[0m\n" "$1"
 }
 
-if [[ $# < 1 ]]; then
+if [[ $# -lt 1 ]]; then
     echo "brki.sh"
     echo "   Brkiziraj fajlove (da budu lijepi i hrskavi ko njegov tost)"
     echo ""
@@ -79,7 +79,7 @@ for filepath in "${FILES[@]}"; do
 
     __OLD_TIMEFORMAT=$TIMEFORMAT
     export TIMEFORMAT='%3lR'
-    res="`(time ffmpeg -y -loglevel panic -i "$oldFull" -max_muxing_queue_size 1024 -vf 'scale=144:-2' -af 'bass=g=-10,treble=g=5,volume=10dB,equalizer=f=2300:width_type=h:width=150:g=25,equalizer=f=2450:width_type=h:width=90:g=-18' -c:v libx264 -b:v 17k -maxrate 10k -ab 27k -map_metadata 0 "$newFull") 2>&1`"
+    res="$( (time ffmpeg -y -loglevel panic -i "$oldFull" -max_muxing_queue_size 1024 -vf 'scale=144:-2' -af 'bass=g=-10,treble=g=5,volume=10dB,equalizer=f=2300:width_type=h:width=150:g=25,equalizer=f=2450:width_type=h:width=90:g=-18' -c:v libx264 -b:v 17k -maxrate 10k -ab 27k -map_metadata 0 "$newFull") 2>&1)"
     res_exit_code=$?
     cmd_duration="$(echo "$res" | tail -n1)"
     export TIMEFORMAT=${__OLD_TIMEFORMAT}
@@ -91,7 +91,7 @@ for filepath in "${FILES[@]}"; do
         continue
     fi
 
-    if [ -z "`find "$newFull" -maxdepth 1 -type f -size +1k 2>/dev/null`" ]; then
+    if [ -z "$(find "$newFull" -maxdepth 1 -type f -size +1k 2>/dev/null)" ]; then
         print_status_error "FAIL"
         rm "$newFull" 2>/dev/null
         continue

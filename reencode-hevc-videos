@@ -18,7 +18,7 @@ print_status_report() {
 print_status_success() {
     printf "\e[30;42m %s \e[0m" "$1"
     shift
-    if [ ! -z $1 ]; then
+    if [ -z "$1" ]; then
         printf " \e[4m%s\e[0m" "$*"
     fi
     printf "\n"
@@ -39,18 +39,15 @@ else
     FILES=("$@")
 fi
 
-total="${#FILES[@]}"
 processed=0
 for filepath in "${FILES[@]}"; do
     print_status "Checking types... ($processed/${#FILES[@]})"
-
-    location="$PWD"
 
     filename=$(basename -- "$filepath")
     filename="${filename%.*}"
 
     HAS_HEVC="$(mediainfo --Inform="Video;%Format%" "$filepath" | grep -iE 'HEVC')"
-    if [[ ! -z "${HAS_HEVC// /}" ]]; then
+    if [ -n "${HAS_HEVC// /}" ]; then
         printf "Transcoding \e[1;36;40m %s \e[0m... " "$filename"
         "$DIR/reencode-video-file" "$filepath" 2>/dev/null >/dev/null
         print_status_success "Done"

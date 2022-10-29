@@ -33,7 +33,7 @@ pactl set-default-sink "$NEW_SINK"
 pactl list sink-inputs |
     grep -E '^S' |
     cut -d'#' -f2 |
-    while read SINK_ID; do
+    while read -r SINK_ID; do
         pactl \
             move-sink-input \
             "$SINK_ID" \

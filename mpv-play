@@ -17,7 +17,7 @@ if [ -z "$1" ]; then
         ' \
         -m \
         -4 \
-			  -p 'mpv'
+        -p 'mpv'
   )"
 else
   URL="$1"

@@ -30,4 +30,3 @@ ffmpeg \
 
 # Clean up after yourself
 rm "$palette_file"
-

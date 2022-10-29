@@ -4,7 +4,7 @@ SESSION_ID_FILE="$HOME/.config/.secrets/instagram"
 function get-post-id() {
   POST_URL="$1"
   if [ -z "$POST_URL" ]; then
-    read POST_URL
+    read -r POST_URL
   fi
 
   url-info "$POST_URL" |
@@ -15,7 +15,7 @@ function get-post-id() {
 function get-query() {
   POST_ID="$1"
   if [ -z "$POST_ID" ]; then
-    read POST_ID
+    read -r POST_ID
   fi
 
   QUERY_TEMPLATE="$(
@@ -41,7 +41,7 @@ function get-query-hash() {
 function get-api-response() {
   POST_URL="$1"
   if [ -z "$POST_URL" ]; then
-    read POST_URL
+    read -r POST_URL
   fi
 
   POST_ID="$(get-post-id "$POST_URL")"
@@ -69,7 +69,7 @@ function get-api-response() {
 function get-post-media() {
   POST_URL="$1"
   if [ -z "$POST_URL" ]; then
-    read POST_URL
+    read -r POST_URL
   fi
 
   API_RESPONSE="$(
@@ -82,7 +82,7 @@ function get-post-media() {
       jq -r '.data.shortcode_media.edge_sidecar_to_children // ""'
   )"
 
-  if [ ! -z "$MULTIPLE_MEDIA" ]; then
+  if [ -n "$MULTIPLE_MEDIA" ]; then
     echo "$MULTIPLE_MEDIA" |
       jq -r '.edges | .[].node | (.video_url // .display_url)'
   else

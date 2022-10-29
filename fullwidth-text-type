@@ -17,9 +17,9 @@ FULLWIDTH_OUTPUT="$(
 			-m \
 			-4 \
 			-p 'Fullwidth type' |
-		$HOME/.scripts/fullwidth-text
+		"$HOME/.scripts/fullwidth-text"
 )"
-if [ ! -z $FULLWIDTH_OUTPUT ]; then
+if [ -n "$FULLWIDTH_OUTPUT" ]; then
 	OLD_CLIPBOARD_CONTENTS="$(xclip -o -selection clipboard)"
 	CAN_RESTORE_CLIPBOARD=$?
 

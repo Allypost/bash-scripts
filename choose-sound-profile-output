@@ -5,8 +5,8 @@ message=''
 function list-entries() {
   pactl list cards |
     grep -P '\t\toutput:' |
-    egrep -v "input" |
-    egrep -v '\Wavailable: no\W' |
+    grep -Ev "input" |
+    grep -Ev '\Wavailable: no\W' |
     cut -d':' -f2- |
     awk -F ' Output ' '{print $1}' |
     awk -F ': ' '{print $2 "\t" "[profile: " $1 "]"}'

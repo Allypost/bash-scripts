@@ -13,7 +13,7 @@ CHOICES=(
 
 CHOICE="$(printf '%s\n' "${CHOICES[@]}" | rofi -dmenu -format i)"
 
-if [ ! -z "$CHOICE" ]; then
+if [ -n "$CHOICE" ]; then
 	echo -n "${CHOICES[$CHOICE]}" |
 		cut -d'|' -f2- |
 		cut -c2- |

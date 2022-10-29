@@ -16,7 +16,7 @@ print_status_report() {
 print_status_success() {
     printf "\e[30;42m %s \e[0m" "$1"
     shift
-    if [ ! -z $1 ]; then
+    if [ -n "$1" ]; then
         printf " \e[4m%s\e[0m" "$*"
     fi
     printf "\n"
@@ -26,7 +26,7 @@ print_status_error() {
     printf "\e[1;101m %s \e[0m\n" "$1"
 }
 
-if [[ $# < 2 ]]; then
+if [[ $# -lt 2 ]]; then
     echo "convert-a-to-b"
     echo "   Convert all files between (media) file types"
     echo "   If only target and source formats are specified, it will convert all files in the current directory"
@@ -105,7 +105,7 @@ for filepath in "${FILES[@]}"; do
 
     __OLD_TIMEFORMAT=$TIMEFORMAT
     export TIMEFORMAT='%3lR'
-    res="`(time ffmpeg -y -loglevel panic -i "$oldFull" -max_muxing_queue_size 1024 -vf 'scale=ceil(iw/2)*2:ceil(ih/2)*2' -ab 320k -map_metadata 0 "$newFull") 2>&1`"
+    res="$( (time ffmpeg -y -loglevel panic -i "$oldFull" -max_muxing_queue_size 1024 -vf 'scale=ceil(iw/2)*2:ceil(ih/2)*2' -ab 320k -map_metadata 0 "$newFull") 2>&1)"
     res_exit_code=$?
     cmd_duration="$(echo "$res" | tail -n1)"
     export TIMEFORMAT=${__OLD_TIMEFORMAT}
@@ -117,7 +117,7 @@ for filepath in "${FILES[@]}"; do
         continue
     fi
 
-    if [ -z "`find "$newFull" -maxdepth 1 -type f -size +1k 2>/dev/null`" ]; then
+    if [ -z "$(find "$newFull" -maxdepth 1 -type f -size +1k 2>/dev/null)" ]; then
         print_status_error "FAIL"
         rm "$newFull" 2>/dev/null
         continue

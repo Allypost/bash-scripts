@@ -13,10 +13,9 @@ URLS=(
 IP=""
 for URL in "${URLS[@]}"; do
     IP="$(fetch "$URL")"
-    if [ ! -z "$IP" ]; then
+    if [ -n "$IP" ]; then
         break
     fi
 done
 
 echo "$IP"
-
