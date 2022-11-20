@@ -18,12 +18,16 @@ from itertools import chain
 BASE_URL = "https://zoro.to"
 
 
+def get_zoroto_page_url(anime_name: str) -> str:
+    return f"{BASE_URL}/watch/{anime_name}"
+
+
 def get_anime_id(anime_name: str) -> str | None:
     Console.log_dim("Fetching episode page...", return_line=True)
     response = cloudscraper\
         .create_scraper()\
         .get(
-            f"{BASE_URL}/watch/{anime_name}",
+            get_zoroto_page_url(anime_name),
             headers={
                 "User-Agent": "Zoro.to stream video downloader"
             },
@@ -250,7 +254,7 @@ def main():
         processed += 1
         download_url = download_sites[site]
         try:
-            download_info = get_download_info(download_url)
+            download_info = get_download_info(download_url, get_zoroto_page_url(anime_name=series_name))
             if download_info is None:
                 raise Exception("No handler")
 
