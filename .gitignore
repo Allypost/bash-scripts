@@ -1,5 +1,6 @@
 .vscode
 .idea
+.fleet
 __pycache__
 
 node_modules
