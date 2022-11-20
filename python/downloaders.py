@@ -1,6 +1,8 @@
+from itertools import chain
 import json
 import os
 import re
+import subprocess
 from typing import Callable, Dict, List, TypeVar, Union
 from bs4 import BeautifulSoup
 import urllib.parse
@@ -8,6 +10,8 @@ from urllib.parse import urlparse
 from dataclasses import dataclass, field
 import cloudscraper
 import os
+
+from python.log.console import Console
 
 try:
     import playwright.sync_api
@@ -26,6 +30,7 @@ class DownloadInfo:
     url: str
     referer: Union[str, None] = None
     headers: list[str] = field(default_factory=list)
+    after_dl: Callable[[str, 'DownloadInfo'], None] = lambda x, y: None
 
 
 HandlerFuncReturn = Union[None, DownloadInfo]
@@ -511,7 +516,8 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
-    response = cloudscraper.create_scraper().get(url, headers={
+    scraper = cloudscraper.create_scraper()
+    response = scraper.get(url, headers={
         "Referer": referer,
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -521,8 +527,9 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
 
     page_html = response.text
 
-    player_embed_el = BeautifulSoup(page_html, "html.parser")\
-        .find(class_="vidcloud-player-embed")
+    page_parsed = BeautifulSoup(page_html, "html.parser")
+
+    player_embed_el = page_parsed.find(class_="vidcloud-player-embed")
 
     if not player_embed_el:
         return None
@@ -569,6 +576,86 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
     except playwright.sync_api.Error as err:
         return None
 
+    def after_dl(output_file: str, download_info: DownloadInfo):
+        item_id = page_parsed.find(id="vidcloud-player").attrs["data-id"]
+        response = scraper.get(
+            f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
+            headers={
+                "Referer": url,
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            },
+        )
+        if not response:
+            return None
+        page_json = response.json()
+
+        if "tracks" not in page_json:
+            return None
+
+        keep_characters = (' ', '.', '_', '-')
+
+        def safe_char(c):
+            if c.isalnum() or c in keep_characters:
+                return c
+            return '_'
+
+        subtitles = [
+            {
+                "lang": track["label"],
+                "file_name": ("".join([
+                    safe_char(c)
+                    for c
+                    in track["label"]
+                ]).rstrip() + ".vtt").replace(r'_+', '_'),
+                "url": track["file"],
+            }
+            for track
+            in page_json["tracks"]
+            if "captions" == track["kind"]
+        ]
+        cmd = [
+            "ffmpeg",
+            "-i", output_file,
+            *list(chain(*[
+                [
+                    "-i", sub["url"],
+                ]
+                for sub
+                in subtitles
+            ])),
+            "-map", "0",
+            *list(chain(*[
+                [
+                    "-map", str(i + 1),
+                ]
+                for i
+                in range(len(subtitles))
+            ])),
+            "-c", "copy",
+            *list(chain(*[
+                [
+                    # f"-metadata:s:s:{i}", f"name='{sub['lang']}'",
+                    # f"-metadata:s:s:{i}", f"language='{re.search(r'^([a-zA-Z]+)', os.path.basename(urlparse(sub['url']).path)).group(1)}'",
+                    f"-metadata:s:s:{i}", f"language=\"{sub['lang']}\"",
+                ]
+                for i, sub
+                in enumerate(subtitles)
+            ])),
+            os.path.splitext(output_file)[0] + ".mkv",
+        ]
+        Console.log_dim("Embedding subtitles...", return_line=True)
+        with subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=1,
+            text=True,
+        ) as proc:
+            if proc.wait() != 0:
+                return None
+        os.remove(output_file)
+
     return DownloadInfo(
         url=handler.m3u8_url,
         referer=referer,
@@ -578,6 +665,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             "Origin: https://rapid.cloud.co",
             f"User-Agent: {handler.user_agent}",
         ],
+        after_dl=after_dl,
     )
 
 

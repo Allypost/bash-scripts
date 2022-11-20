@@ -265,6 +265,7 @@ def main():
 
             url = download_info.url
             referer = download_info.referer or url
+            output_file = f"{number_format % (episode_number)}.mp4"
 
             Console.log(
                 f"{Chalk.colour(Chalk.italic)}Downloading from {site}{Chalk.colour('23m')}")
@@ -282,7 +283,7 @@ def main():
                     for header
                     in download_info.headers
                 ])),
-                "--output", f"{number_format % (episode_number)}.mp4",
+                "--output", output_file,
                 url,
             ]
             download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
@@ -302,6 +303,8 @@ def main():
                 if proc.wait() != 0:
                     print(subprocess.list2cmdline(download_cmd))
                     raise Exception("Something broke")
+
+            download_info.after_dl(output_file, download_info)
         except Exception as e:
             if str(e) == "No handler":
                 continue
