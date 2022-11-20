@@ -269,6 +269,7 @@ def main():
             Console.log(
                 f"{Chalk.colour(Chalk.italic)}Downloading from {site}{Chalk.colour('23m')}")
 
+            Console.log_dim("Starting download...", return_line=True)
             download_cmd = [
                 "yt-dlp",
                 "--no-warnings",
