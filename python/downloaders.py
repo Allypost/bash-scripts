@@ -670,6 +670,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
 
 
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
+    "rapid-cloud.co": handle__rapid_cloud_co,
     "gogoplay1.com": handle__gogoplay1_com,
     "watchsb.com": handle__watchsb_com,
     "fembed-hd.com": handle__fembed_hd_com,
@@ -682,7 +683,6 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
     "streamtape.net": handle__streamtape_net,
-    "rapid-cloud.co": handle__rapid_cloud_co,
 }
 
 aliases: Dict[str, str] = {
