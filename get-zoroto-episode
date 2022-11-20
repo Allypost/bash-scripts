@@ -175,6 +175,8 @@ def get_anime_episode_download_server_list(
         in elements
     }
 
+    Console.log_dim("Fetching list of source pages...", return_line=True)
+
     with multiprocessing.Pool() as pool:
         results = [
             item
@@ -249,12 +251,15 @@ def main():
         in sorted_download_site_urls
     }
 
+    Console.log_dim("Trying to find download link...", return_line=True)
+
     processed = 0
     for site in download_sites:
         processed += 1
         download_url = download_sites[site]
         try:
-            download_info = get_download_info(download_url, get_zoroto_page_url(anime_name=series_name))
+            download_info = get_download_info(
+                download_url, get_zoroto_page_url(anime_name=series_name))
             if download_info is None:
                 raise Exception("No handler")
 
