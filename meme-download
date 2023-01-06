@@ -35,6 +35,28 @@ TMP_FILE_LENGTH="${#TMP_FILE}"
 TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
 USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
 
+function send-notification {
+  urgency="$1"
+  expire_time="$2"
+  icon="$3"
+  title="$4"
+  message="$5"
+
+  printf "[%s] |%s| - %s" "$urgency" "$title" "$message"
+
+  if ! command -v notify-send &>/dev/null; then
+    return 0
+  fi
+
+  notify-send \
+    --urgency "$urgency" \
+    --expire-time "$expire_time" \
+    --icon "$icon" \
+    --app-name 'meme downloader' \
+    "$title" \
+    "$message"
+}
+
 if [[ -z "$URL" ]]; then
   exit 0
 fi
@@ -69,22 +91,20 @@ fi
     . $0 "$(get-twitter-screenshot "$URL")"
     exit 0
   else
-    notify-send \
-      --urgency normal \
-      --expire-time 5000 \
-      --icon error \
-      --app-name 'meme downloader' \
+    send-notification \
+      normal \
+      5000 \
+      error \
       'Download failed' \
       "The meme downloader couldn't download the provided page"
 
     exit 1
   fi
 
-  notify-send \
-    --urgency low \
-    --expire-time 2000 \
-    --icon success \
-    --app-name 'meme downloader' \
+  send-notification \
+    low \
+    2000 \
+    success \
     'Download finished' \
     "The MEME from $URL has finished downloading"
 ) &>"$TMP_FILE"
