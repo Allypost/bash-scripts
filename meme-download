@@ -67,7 +67,13 @@ fi
   mkdir -p "$MEME_DIR"
   cd "$MEME_DIR" || exit
 
-  yt-dlp --cookies-from-browser chrome -o "$OUTPUT_TEMPLATE" --user-agent "$USER_AGENT" --exec 'touch {} && memfix {}' "$URL"
+  yt-dlp \
+    --no-check-certificate \
+    --socket-timeout 120 \
+    -o "$OUTPUT_TEMPLATE" \
+    --user-agent "$USER_AGENT" \
+    --exec 'touch {} && memfix {}' \
+    "$URL"
 
   FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
 
