@@ -276,7 +276,10 @@ def main():
                 "--no-warnings",
                 "--no-check-certificate",
                 "--concurrent-fragments", "16",
+                "--abort-on-unavailable-fragments",
                 "--retries", "infinite",
+                "--downloader", "ffmpeg",
+                "--downloader-args", "-progress - -nostats",
                 "--referer", referer,
                 *list(chain(*[
                     ["--add-header", header]
@@ -286,19 +289,40 @@ def main():
                 "--output", output_file,
                 url,
             ]
-            download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
+            download_line_native = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
 
             with subprocess.Popen(
                 download_cmd,
                 stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 bufsize=1,
                 text=True,
             ) as proc:
                 for line in proc.stdout:
-                    if not download_line.search(line):
+                    # if download_line_native.search(line):
+                    #     status = line.split(" ", maxsplit=1)[1].strip()
+                    #     Console.log_dim(status, return_line=True)
+                    #     continue
+
+                    # Read lines until status stuff comes along
+                    if line[0] == '[':
                         continue
-                    status = line.split(" ", maxsplit=1)[1].strip()
-                    Console.log_dim(status, return_line=True)
+                    break
+                # Read status block
+                while proc.poll() is None:
+                    try:
+                        status = {}
+                        for line in proc.stdout:
+                            if line.startswith('progress='):
+                                break
+                            key, value = line.strip().split("=", maxsplit=1)
+                            status[key.strip()] = value.strip()
+                        Console.log_dim(
+                            f"time={status['out_time']} | fps={status['fps'].rjust(6, ' ')} speed={status['speed'].rjust(5, ' ')} bitrate={status['bitrate'].rjust(13, ' ')} | size={status['total_size']}",
+                            return_line=True,
+                        )
+                    except:
+                        pass
 
                 if proc.wait() != 0:
                     print(subprocess.list2cmdline(download_cmd))
