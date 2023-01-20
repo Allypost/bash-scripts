@@ -201,6 +201,16 @@ def main():
             dest="series_type",
         )
 
+        parser.add_argument(
+            "-o, --offset",
+            help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
+            type=int,
+            nargs='?',
+            required=False,
+            default=0,
+            dest="offset",
+        )
+
     argv = parse_arguments(
         site_name="zoro.to",
         extend=with_additional_args
@@ -216,10 +226,13 @@ def main():
     if series_type != "sub" and series_type != "dub":
         raise Exception("Wrong series type (must be `sub' or `dub')")
 
-    episode_number = get_episode_number_to_download(argv)
+    episode_number_offset = argv.offset
+    episode_number = get_episode_number_to_download(argv) - episode_number_offset
+
+    offset_str = f" (offset episode {episode_number + episode_number_offset})" if episode_number_offset else ""
 
     Console.log(
-        f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+        f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number + offset_str, Chalk.black, Chalk.bg_blue_bright)}')
 
     anime_id = get_anime_id(series_name)
     if anime_id is None:
@@ -228,7 +241,7 @@ def main():
 
     episodes = get_anime_episode_list(anime_id)
     if episode_number not in episodes:
-        Console.log_error(f"Episode {episode_number} can't be found")
+        Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
         exit(1)
 
     download_sites = get_anime_episode_download_server_list(
@@ -265,7 +278,7 @@ def main():
 
             url = download_info.url
             referer = download_info.referer or url
-            output_file = f"{number_format % (episode_number)}.mp4"
+            output_file = f"{number_format % (episode_number + episode_number_offset)}.mp4"
 
             Console.log(
                 f"{Chalk.colour(Chalk.italic)}Downloading from {site}{Chalk.colour('23m')}")
