@@ -143,6 +143,16 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "-o, --offset",
+        help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
+        type=int,
+        nargs='?',
+        required=False,
+        default=0,
+        dest="offset",
+    )
+
+    parser.add_argument(
         "-f, --number-format",
         help="String format on how to name files. Defaults to: %02d",
         type=str,
@@ -174,9 +184,12 @@ def main():
     if series_name is None:
         raise Exception("No series name")
 
-    episode_number = get_episode_number_to_download(argv)
+    episode_number_offset = argv.offset
+    episode_number = get_episode_number_to_download(argv) - episode_number_offset
 
     Console.log(f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
+
+    offset_str = f" (offset episode {episode_number + episode_number_offset})" if episode_number_offset else ""
 
     anime_id = get_anime_id(series_name)
     if anime_id is None:
@@ -185,7 +198,7 @@ def main():
 
     episodes = get_anime_episode_list(anime_id)
     if episode_number not in episodes:
-        Console.log_error(f"Episode {episode_number} can't be found")
+        Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
         exit(1)
 
     download_sites = get_anime_episode_download_server_list(
@@ -226,7 +239,7 @@ def main():
                 "--concurrent-fragments", "16",
                 "--retries", "infinite",
                 "--referer", referer,
-                "--output", f"{number_format % (episode_number)}.mp4",
+                "--output", f"{number_format % (episode_number + episode_number_offset)}.mp4",
                 url,
             ]
             download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
