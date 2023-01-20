@@ -232,7 +232,7 @@ def main():
     offset_str = f" (offset episode {episode_number + episode_number_offset})" if episode_number_offset else ""
 
     Console.log(
-        f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number + offset_str, Chalk.black, Chalk.bg_blue_bright)}')
+        f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(str(episode_number) + offset_str, Chalk.black, Chalk.bg_blue_bright)}')
 
     anime_id = get_anime_id(series_name)
     if anime_id is None:
