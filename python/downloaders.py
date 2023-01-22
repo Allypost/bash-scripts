@@ -712,7 +712,6 @@ def get_download_info(url: str, referer: Union[str, None] = None) -> Union[None,
     if domain in aliases:
         domain = aliases[domain]
         parsed = parsed._replace(netloc=domain)
-        url = parsed.geturl()
 
     if domain not in handlers:
         return None
