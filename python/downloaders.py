@@ -469,6 +469,7 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
         m3u8_url = None
         user_agent = None
         accept_language = None
+        referer = None
 
         def handle_request(self, req):
             if self.m3u8_url is not None:
@@ -483,6 +484,7 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
             self.m3u8_url = req.url
             self.accept_language = req.headers.get("accept-language")
             self.user_agent = req.headers.get("user-agent")
+            self.referer = req.headers.get("referer")
             page.close()
 
     handler = RequestHandler()
@@ -505,11 +507,10 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
     return DownloadInfo(
         url=handler.m3u8_url,
-        referer="https://watchsb.com/",
+        referer=handler.referer,
         headers=[
             "Accept: */*",
             f"Accept-Language: {handler.accept_language}",
-            "Origin: https://watchsb.com",
             f"User-Agent: {handler.user_agent}",
         ],
     )
