@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from dataclasses import dataclass, field
 import cloudscraper
 import os
+import base64
 
 from python.log.console import Console
 
@@ -17,8 +18,8 @@ try:
     import playwright.sync_api
 except ImportError as err:
     print("Installing playwright...")
-    assert(os.system("pip install playwright") == 0)
-    assert(os.system("playwright install firefox") == 0)
+    assert (os.system("pip install playwright") == 0)
+    assert (os.system("playwright install firefox") == 0)
 import playwright.sync_api
 from playwright.sync_api import sync_playwright
 
@@ -517,10 +518,12 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
+    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
+    accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
     scraper = cloudscraper.create_scraper()
     response = scraper.get(url, headers={
         "Referer": referer,
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+        "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
     })
     if not response:
@@ -535,61 +538,125 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
     if not player_embed_el:
         return None
 
-    class RequestHandler:
-        m3u8_url = None
-        user_agent = None
-        accept_language = None
+    item_id = page_parsed.find(id="vidcloud-player").attrs["data-id"]
 
-        def handle_request(self, req):
-            if self.m3u8_url is not None:
-                return
-
-            parsed = urllib.parse.urlparse(req.url)
-            is_video = parsed.path.endswith("master.m3u8")
-
-            if not is_video:
-                return
-
-            self.m3u8_url = req.url
-            self.accept_language = req.headers.get("accept-language")
-            self.user_agent = req.headers.get("user-agent")
-            page.close()
-
-    handler = RequestHandler()
-
-    try:
-        with sync_playwright() as p:
-            browser = p.firefox.launch()
-            page = browser.new_page()
-            page.on("request", handler.handle_request)
-            while handler.m3u8_url is None:
-                try:
-                    page.goto(url, referer=referer)
-                    page.click(
-                        '#mediaplayer [aria-label="Play"]',
-                        force=True,
-                        timeout=10_000,
-                    )
-                except Exception:
-                    pass
-
-            browser.close()
-    except playwright.sync_api.Error as err:
+    if not item_id:
         return None
 
-    def after_dl(output_file: str, download_info: DownloadInfo):
-        item_id = page_parsed.find(id="vidcloud-player").attrs["data-id"]
-        response = scraper.get(
-            f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
-            headers={
-                "Referer": url,
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-            },
+    response = scraper.get(
+        f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
+        headers={
+            "Referer": url,
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        },
+    )
+    if not response:
+        return None
+
+    page_json = response.json()
+
+    if not page_json:
+        return None
+
+    encrypted = page_json.get("encrypted") == True
+
+    m3u8_url = None
+    if encrypted:
+        key = base64.b64decode("MjQyajJZYkM5UExaeURST1RDMg==").decode("utf-8")
+        current_file_path = os.path.dirname(os.path.realpath(__file__))
+        lib_path = os.path.join(
+            current_file_path,
+            "runners",
+            "libraries",
+            "js",
+            "crypto-js.min.js",
         )
-        if not response:
+
+        with open(lib_path) as f:
+            lib_contents = f.read()
+
+        payload = f"""
+            const CryptoJS = require('./crypto');
+
+            const key = {json.dumps(key)};
+            const sources = {json.dumps(page_json.get('sources'))};
+
+            process.stdout.write(
+                CryptoJS.AES.decrypt(sources, key).toString(CryptoJS.enc.Utf8),
+            );
+        """
+        result = run_js(
+            payload,
+            files=[
+                {
+                    "name": "crypto.js",
+                    "content": lib_contents,
+                },
+            ],
+        )
+        result = result.strip()
+
+        try:
+            m3u8_url = json.loads(result)[0]["file"]
+        except Exception:
             return None
-        page_json = response.json()
+
+    # class RequestHandler:
+    #     m3u8_url = None
+    #     user_agent = None
+    #     accept_language = None
+
+    #     def handle_request(self, req):
+    #         if self.m3u8_url is not None:
+    #             return
+
+    #         parsed = urllib.parse.urlparse(req.url)
+    #         is_video = parsed.path.endswith("master.m3u8")
+
+    #         if not is_video:
+    #             return
+
+    #         self.m3u8_url = req.url
+    #         self.accept_language = req.headers.get("accept-language")
+    #         self.user_agent = req.headers.get("user-agent")
+    #         page.close()
+
+    # handler = RequestHandler()
+
+    # try:
+    #     with sync_playwright() as p:
+    #         browser = p.firefox.launch()
+    #         page = browser.new_page()
+    #         page.on("request", handler.handle_request)
+    #         while handler.m3u8_url is None:
+    #             try:
+    #                 page.goto(url, referer=referer)
+    #                 page.click(
+    #                     '#mediaplayer [aria-label="Play"]',
+    #                     force=True,
+    #                     timeout=10_000,
+    #                 )
+    #             except Exception:
+    #                 pass
+
+    #         browser.close()
+    # except playwright.sync_api.Error as err:
+    #     return None
+
+    def after_dl(output_file: str, download_info: DownloadInfo):
+        # item_id = page_parsed.find(id="vidcloud-player").attrs["data-id"]
+        # response = scraper.get(
+        #     f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
+        #     headers={
+        #         "Referer": url,
+        #         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+        #         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        #     },
+        # )
+        # if not response:
+        #     return None
+        # page_json = response.json()
 
         if "tracks" not in page_json:
             return None
@@ -657,14 +724,17 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
                 return None
         os.remove(output_file)
 
+    if m3u8_url is None:
+        return None
+
     return DownloadInfo(
-        url=handler.m3u8_url,
+        url=m3u8_url,
         referer=referer,
         headers=[
             "Accept: */*",
-            f"Accept-Language: {handler.accept_language}",
+            f"Accept-Language: {accept_language}",
             "Origin: https://rapid.cloud.co",
-            f"User-Agent: {handler.user_agent}",
+            f"User-Agent: {user_agent}",
         ],
         after_dl=after_dl,
     )
