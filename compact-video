@@ -14,6 +14,7 @@ ffmpeg \
     -i "$1" \
     -max_muxing_queue_size 1024 \
     -c:v libx264 -crf 29 \
+    -map 0:v -map 0:a -af channelmap=0 \
     -vf "scale=-2:480" -preset slow -movflags faststart \
     -b:a 280k \
     -map_metadata -1 \
