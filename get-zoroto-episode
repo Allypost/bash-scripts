@@ -15,7 +15,7 @@ import cloudscraper
 import multiprocessing
 from itertools import chain
 
-BASE_URL = "https://zoro.to"
+BASE_URL = "https://aniwatch.to"
 
 
 def get_zoroto_page_url(anime_name: str) -> str:
