@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import re
@@ -7,7 +6,7 @@ import urllib.parse
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Callable, Dict, List, TypeVar, Union
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import cloudscraper
 import requests
@@ -653,7 +652,29 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
 
     m3u8_url = None
     if encrypted:
-        key = base64.b64decode("MjQyajJZYkM5UExaeURST1RDMg==").decode("utf-8")
+        player_url = next(
+            x
+            for x in page_parsed.find_all("script")
+            if x.attrs.get("src")
+            and x.attrs["src"].startswith("/js/player/prod/e6-player.min.js")
+        ).attrs["src"]
+        player_url = urljoin(response.url, player_url)
+        Console.log_dim("Got encrypted response. Breaking...", return_line=True)
+        key_resp = scraper.post(
+            "https://deobfuscator.oracle-arm-1.ji0.li/deobfuscate",
+            json={
+                "url": player_url,
+            },
+        ).json()
+        if "message" in key_resp:
+            Console.clear_line()
+            Console.log_error(key_resp["message"])
+            return None
+
+        key = key_resp["key"]
+        Console.log_dim(
+            f"Got encryption key `{key}'. Decrypting stream info...", return_line=True
+        )
         current_file_path = os.path.dirname(os.path.realpath(__file__))
         lib_path = os.path.join(
             current_file_path,
