@@ -10,6 +10,7 @@ from typing import Callable, Dict, List, TypeVar, Union
 from urllib.parse import urlparse
 
 import cloudscraper
+import requests
 from bs4 import BeautifulSoup
 
 from python.log.console import Console
@@ -35,6 +36,77 @@ class DownloadInfo:
 
 
 HandlerFuncReturn = Union[None, DownloadInfo]
+
+
+def handle__instagram_com(url: str) -> Union[List[str], None]:
+    SESSION_ID_FILE = os.path.join(
+        os.path.expanduser("~"),
+        "./.config/.secrets/instagram",
+    )
+
+    def parse_url(raw_url: str) -> dict:
+        url = raw_url.strip()
+
+        if url.find("://") == -1 and not url.startswith("//"):
+            parsed_url = urllib.parse.urlparse("//" + url, "http")
+        else:
+            parsed_url = urllib.parse.urlparse(url)
+
+        res = parsed_url._asdict()
+        if res["query"]:
+            res["query"] = urllib.parse.parse_qs(res["query"])
+
+        return res
+
+    def session_cookie() -> str:
+        if not os.path.isfile(SESSION_ID_FILE):
+            return ""
+
+        with open(SESSION_ID_FILE) as f:
+            return f"sessionid={f.readline()}".strip()
+
+    def get_api_response(id: str) -> requests.Response:
+        query_hash = "2efa04f61586458cef44441f474eee7c"
+        query_args = {
+            "shortcode": id,
+            "child_comment_count": 0,
+            "fetch_comment_count": 0,
+            "parent_comment_count": 0,
+            "has_threaded_comments": True,
+        }
+
+        api_url = f"https://www.instagram.com/graphql/query/?query_hash={query_hash}&variables={urllib.parse.quote(json.dumps(query_args))}"
+        headers = {
+            "Cookie": session_cookie(),
+            "User-Agent": "Instagram post download script (personal use only I swar)",
+        }
+
+        return requests.get(api_url, headers=headers)
+
+    url_info = parse_url(raw_url=url)
+
+    # `url_info["path"]` should be of format `/p/$POST_ID/`
+    post_id = url_info["path"].split("/")[-2]
+
+    r = get_api_response(id=post_id)
+
+    try:
+        json_response = r.json()
+        edges = json_response["data"]["shortcode_media"]
+
+        if "edge_sidecar_to_children" not in edges:
+            return [edges["display_url"]]
+        else:
+            edges = edges["edge_sidecar_to_children"]["edges"]
+
+        media_urls = [
+            entry["node"].get("video_url", entry["node"]["display_url"])
+            for entry in edges
+        ]
+
+        return media_urls
+    except ValueError:
+        return None
 
 
 def handle__streamani_net(url: str) -> HandlerFuncReturn:
