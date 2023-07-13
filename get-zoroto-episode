@@ -25,6 +25,11 @@ def get_zoroto_page_url(anime_name: str) -> str:
 
 
 def get_anime_id(anime_name: str) -> str | None:
+    Console.log_dim("Extracting id from name", return_line=True)
+    name_parts = anime_name.split("-")
+    anime_id = name_parts[-1]
+    if anime_id.isdigit():
+        return anime_id
     Console.log_dim("Fetching episode page...", return_line=True)
     response = cloudscraper.create_scraper().get(
         get_zoroto_page_url(anime_name),
