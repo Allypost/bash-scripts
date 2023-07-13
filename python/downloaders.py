@@ -603,6 +603,209 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
     )
 
 
+def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
+    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
+    accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
+    scraper = cloudscraper.create_scraper()
+    response = scraper.get(
+        url,
+        headers={
+            "Referer": referer,
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        },
+    )
+    if not response:
+        return None
+
+    page_html = response.text
+
+    page_parsed = BeautifulSoup(page_html, "html.parser")
+
+    player_embed_el = page_parsed.find(id="megacloud-player")
+
+    if not player_embed_el:
+        return None
+
+    item_id = player_embed_el.attrs["data-id"]
+
+    if not item_id:
+        return None
+
+    response = scraper.get(
+        f"https://megacloud.tv/embed-2/ajax/e-1/getSources?id={item_id}",
+        headers={
+            "Referer": url,
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        },
+    )
+    if not response:
+        return None
+
+    page_json = response.json()
+
+    if not page_json:
+        return None
+
+    encrypted = page_json.get("encrypted") == True
+
+    m3u8_url = None
+    if encrypted:
+        player_url = next(
+            x
+            for x in page_parsed.find_all("script")
+            if x.attrs.get("src")
+            and x.attrs["src"].startswith("/js/player/a/prod/e1-player.min.js")
+        ).attrs["src"]
+        player_url = urljoin(response.url, player_url)
+        Console.log_dim("Got encrypted response. Breaking...", return_line=True)
+        key_resp = scraper.post(
+            "https://deobfuscator.oracle-arm-1.ji0.li/deobfuscate",
+            json={
+                "url": player_url,
+            },
+        ).json()
+        if "message" in key_resp:
+            Console.clear_line()
+            Console.log_error(key_resp["message"])
+            return None
+
+        key = key_resp["key"]
+        Console.log_dim(
+            f"Got encryption key `{key}'. Decrypting stream info...", return_line=True
+        )
+        current_file_path = os.path.dirname(os.path.realpath(__file__))
+        lib_path = os.path.join(
+            current_file_path,
+            "runners",
+            "libraries",
+            "js",
+            "crypto-js.min.js",
+        )
+
+        with open(lib_path) as f:
+            lib_contents = f.read()
+
+        payload = f"""
+            const CryptoJS = require('./crypto');
+
+            const key = {json.dumps(key)};
+            const sources = {json.dumps(page_json.get('sources'))};
+
+            process.stdout.write(
+                CryptoJS.AES.decrypt(sources, key).toString(CryptoJS.enc.Utf8),
+            );
+        """
+        result = run_js(
+            payload,
+            files=[
+                {
+                    "name": "crypto.js",
+                    "content": lib_contents,
+                },
+            ],
+        )
+        result = result.strip()
+
+        try:
+            m3u8_url = json.loads(result)[0]["file"]
+        except Exception:
+            return None
+
+    def after_dl(output_file: str, download_info: DownloadInfo):
+        if "tracks" not in page_json:
+            return None
+
+        keep_characters = (" ", ".", "_", "-")
+
+        def safe_char(c):
+            if c.isalnum() or c in keep_characters:
+                return c
+            return "_"
+
+        subtitles = [
+            {
+                "lang": track["label"],
+                "file_name": (
+                    "".join([safe_char(c) for c in track["label"]]).rstrip() + ".vtt"
+                ).replace(r"_+", "_"),
+                "url": track["file"],
+            }
+            for track in page_json["tracks"]
+            if "captions" == track["kind"]
+        ]
+        cmd = [
+            "ffmpeg",
+            "-i",
+            output_file,
+            *list(
+                chain(
+                    *[
+                        [
+                            "-i",
+                            sub["url"],
+                        ]
+                        for sub in subtitles
+                    ]
+                )
+            ),
+            "-map",
+            "0",
+            *list(
+                chain(
+                    *[
+                        [
+                            "-map",
+                            str(i + 1),
+                        ]
+                        for i in range(len(subtitles))
+                    ]
+                )
+            ),
+            "-c",
+            "copy",
+            *list(
+                chain(
+                    *[
+                        [
+                            f"-metadata:s:s:{i}",
+                            f"language=\"{sub['lang']}\"",
+                        ]
+                        for i, sub in enumerate(subtitles)
+                    ]
+                )
+            ),
+            os.path.splitext(output_file)[0] + ".mkv",
+        ]
+        Console.log_dim("Embedding subtitles...", return_line=True)
+        with subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=1,
+            text=True,
+        ) as proc:
+            if proc.wait() != 0:
+                return None
+        os.remove(output_file)
+
+    if m3u8_url is None:
+        return None
+
+    return DownloadInfo(
+        url=m3u8_url,
+        referer=referer,
+        headers=[
+            "Accept: */*",
+            f"Accept-Language: {accept_language}",
+            "Origin: https://rapid.cloud.co",
+            f"User-Agent: {user_agent}",
+        ],
+        after_dl=after_dl,
+    )
+
+
 def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
     user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
     accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
@@ -865,6 +1068,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
 
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "rapid-cloud.co": handle__rapid_cloud_co,
+    "megacloud.tv": handle__megacloud_tv,
     "gogoplay1.com": handle__gogoplay1_com,
     "watchsb.com": handle__watchsb_com,
     "fembed-hd.com": handle__fembed_hd_com,
