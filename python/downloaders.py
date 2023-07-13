@@ -1,16 +1,16 @@
-from itertools import chain
+import base64
 import json
 import os
 import re
 import subprocess
-from typing import Callable, Dict, List, TypeVar, Union
-from bs4 import BeautifulSoup
 import urllib.parse
-from urllib.parse import urlparse
 from dataclasses import dataclass, field
+from itertools import chain
+from typing import Callable, Dict, List, TypeVar, Union
+from urllib.parse import urlparse
+
 import cloudscraper
-import os
-import base64
+from bs4 import BeautifulSoup
 
 from python.log.console import Console
 
@@ -18,8 +18,8 @@ try:
     import playwright.sync_api
 except ImportError as err:
     print("Installing playwright...")
-    assert (os.system("pip install playwright") == 0)
-    assert (os.system("playwright install firefox") == 0)
+    assert os.system("pip install playwright") == 0
+    assert os.system("playwright install firefox") == 0
 import playwright.sync_api
 from playwright.sync_api import sync_playwright
 
@@ -31,7 +31,7 @@ class DownloadInfo:
     url: str
     referer: Union[str, None] = None
     headers: list[str] = field(default_factory=list)
-    after_dl: Callable[[str, 'DownloadInfo'], None] = lambda x, y: None
+    after_dl: Callable[[str, "DownloadInfo"], None] = lambda x, y: None
 
 
 HandlerFuncReturn = Union[None, DownloadInfo]
@@ -43,20 +43,21 @@ def handle__streamani_net(url: str) -> HandlerFuncReturn:
 
 def handle__sbplay_one(url: str) -> HandlerFuncReturn:
     download_page = url.replace("/e/", "/d/")
-    page_html = cloudscraper\
-        .create_scraper()\
+    page_html = (
+        cloudscraper.create_scraper()
         .get(
             download_page,
-            headers={
-                "User-Agent": "Gogo stream video downloader"
-            },
-        )\
+            headers={"User-Agent": "Gogo stream video downloader"},
+        )
         .text
+    )
 
-    download_links = BeautifulSoup(page_html, "html.parser")\
-        .find(class_="contentbox")\
-        .find("table")\
+    download_links = (
+        BeautifulSoup(page_html, "html.parser")
+        .find(class_="contentbox")
+        .find("table")
         .find_all("td")
+    )
 
     @dataclass
     class Info:
@@ -67,17 +68,14 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
     def fix_pair(pair):
         link_, info_ = pair
 
-        file_id, mode, file_hash = link_\
-            .find("a")["onclick"]\
-            .replace("download_video", "")[1:-1]\
-            .replace("'", "")\
+        file_id, mode, file_hash = (
+            link_.find("a")["onclick"]
+            .replace("download_video", "")[1:-1]
+            .replace("'", "")
             .split(",")
+        )
 
-        w, h = info_\
-            .text\
-            .strip()\
-            .split(',')[0]\
-            .split('x')
+        w, h = info_.text.strip().split(",")[0].split("x")
 
         return (
             Info(
@@ -92,41 +90,43 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
         )
 
     info = sorted(
-        [
-            fix_pair(download_links[i:i+2])
-            for i
-            in range(0, len(download_links), 2)
-        ],
+        [fix_pair(download_links[i : i + 2]) for i in range(0, len(download_links), 2)],
         key=lambda x: x[1],
         reverse=True,
     )[0][0]
 
     download_generator_url = f"https://sbplay.one/dl?op=download_orig&id={info.id}&mode={info.mode}&hash={info.hash}"
 
-    page_html = cloudscraper\
-        .create_scraper()\
+    page_html = (
+        cloudscraper.create_scraper()
         .get(
             download_generator_url,
-            headers={
-                "User-Agent": "Gogo stream video downloader"
-            },
-        )\
+            headers={"User-Agent": "Gogo stream video downloader"},
+        )
         .text
+    )
 
-    download_link = BeautifulSoup(page_html, "html.parser")\
-        .find(class_="contentbox")\
+    download_link = (
+        BeautifulSoup(page_html, "html.parser")
+        .find(class_="contentbox")
         .find("a")["href"]
+    )
 
     return DownloadInfo(url=download_link, referer=download_generator_url)
 
 
 def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
-    page_html = cloudscraper.create_scraper().get(url, headers={
-        "User-Agent": "Gogo stream video downloader"
-    }).text
+    page_html = (
+        cloudscraper.create_scraper()
+        .get(url, headers={"User-Agent": "Gogo stream video downloader"})
+        .text
+    )
 
-    script_data = BeautifulSoup(page_html, "html.parser").find(
-        lambda tag: tag.name == "script" and "MDCore.ref" in str(tag.string)).string.strip()
+    script_data = (
+        BeautifulSoup(page_html, "html.parser")
+        .find(lambda tag: tag.name == "script" and "MDCore.ref" in str(tag.string))
+        .string.strip()
+    )
 
     payload = f"const MDCore = {{}}; {script_data}; process.stdout.write(`https:${{MDCore.wurl}}`);"
 
@@ -140,32 +140,44 @@ def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
 
 def handle__embedsito_com(url: str) -> HandlerFuncReturn:
     api_id = url.split("/")[-1]
-    resp = cloudscraper.create_scraper().post(
-        f"https://embedsito.com/api/source/{api_id}",
-        headers={
-            "accept": "*/*",
-            "accept-language": "en-GB,en;q=0.9,hr;q=0.8,de;q=0.7",
-            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "x-requested-with": "XMLHttpRequest",
-            "referer": url,
-        },
-        data="r=&d=embedsito.com"
-    ).json()['data']
+    resp = (
+        cloudscraper.create_scraper()
+        .post(
+            f"https://embedsito.com/api/source/{api_id}",
+            headers={
+                "accept": "*/*",
+                "accept-language": "en-GB,en;q=0.9,hr;q=0.8,de;q=0.7",
+                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "x-requested-with": "XMLHttpRequest",
+                "referer": url,
+            },
+            data="r=&d=embedsito.com",
+        )
+        .json()["data"]
+    )
 
     return DownloadInfo(
         url=sorted(
             resp,
             key=lambda k: int(k["label"][:-1]),
             reverse=True,
-        )[0]["file"],
+        )[
+            0
+        ]["file"],
         referer=url,
     )
 
 
 def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
     page_html = cloudscraper.create_scraper().get(url).text
-    packed_script = BeautifulSoup(page_html, 'html.parser').find(
-        lambda tag: tag.name == "script" and "function(p,a,c,k,e,d)" in str(tag.string)).string
+    packed_script = (
+        BeautifulSoup(page_html, "html.parser")
+        .find(
+            lambda tag: tag.name == "script"
+            and "function(p,a,c,k,e,d)" in str(tag.string)
+        )
+        .string
+    )
 
     payload = f"""
     const fn = {packed_script[4:]}
@@ -174,8 +186,9 @@ def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
     r = run_js(payload)
 
     # Better: video_url = re.match(r'player\.src\("([^"]+)"\)', r)
-    video_url = next(x for x in r.split("player.")
-                     if x.startswith('src("')).strip()[5:-3]
+    video_url = next(x for x in r.split("player.") if x.startswith('src("')).strip()[
+        5:-3
+    ]
 
     return DownloadInfo(url=video_url, referer=url)
 
@@ -214,30 +227,29 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
             return None
         page_html = response.text
 
-        page = BeautifulSoup(page_html, 'html.parser')
+        page = BeautifulSoup(page_html, "html.parser")
 
-        attr_script_crypto_a = page.find('body')['class'][0].split('-')[1]
+        attr_script_crypto_a = page.find("body")["class"][0].split("-")[1]
         attr_script_crypto_b = page.find(
-            lambda tag:
-            tag.name == 'div'
-            and 'class' in tag.attrs
-            and 'wrapper' in tag.attrs['class']
-            and [x for x in tag.attrs['class'] if x.startswith('container-')]
-        )['class']
-        attr_script_crypto_b = [x for x in attr_script_crypto_b if x.startswith(
-            'container-')][0].split('-')[1]
+            lambda tag: tag.name == "div"
+            and "class" in tag.attrs
+            and "wrapper" in tag.attrs["class"]
+            and [x for x in tag.attrs["class"] if x.startswith("container-")]
+        )["class"]
+        attr_script_crypto_b = [
+            x for x in attr_script_crypto_b if x.startswith("container-")
+        ][0].split("-")[1]
         attr_script_crypto_c = page.find(
-            lambda tag:
-            tag.name == 'div'
-            and 'class' in tag.attrs
-            and [x for x in tag.attrs['class'] if x.startswith('videocontent-')]
-        )['class']
-        attr_script_crypto_c = [x for x in attr_script_crypto_c if x.startswith(
-            'videocontent-')][0].split('-')[1]
-        attr_script_crypto = page.find(
-            'script',
-            attrs={"data-name": "episode"}
-        ).attrs['data-value']
+            lambda tag: tag.name == "div"
+            and "class" in tag.attrs
+            and [x for x in tag.attrs["class"] if x.startswith("videocontent-")]
+        )["class"]
+        attr_script_crypto_c = [
+            x for x in attr_script_crypto_c if x.startswith("videocontent-")
+        ][0].split("-")[1]
+        attr_script_crypto = page.find("script", attrs={"data-name": "episode"}).attrs[
+            "data-value"
+        ]
 
         current_file_path = os.path.dirname(os.path.realpath(__file__))
         lib_path = os.path.join(
@@ -339,13 +351,11 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
         sources = sorted(
             [
                 [
-                    int(source['label'][:-2]
-                        ) if source['label'][:-2].isdigit() else 0,
-                    source['file'],
+                    int(source["label"][:-2]) if source["label"][:-2].isdigit() else 0,
+                    source["file"],
                 ]
-                for source
-                in api_response['source']
-                if source['label'][-1] == 'P'
+                for source in api_response["source"]
+                if source["label"][-1] == "P"
             ],
             key=lambda x: x[0],
         )
@@ -370,8 +380,7 @@ def handle__dood_ws(url: str) -> HandlerFuncReturn:
         return None
     page_html = response.text
 
-    something_url = re.search(
-        r"\$.get\('/pass_md5/([^']+)", page_html, re.IGNORECASE)
+    something_url = re.search(r"\$.get\('/pass_md5/([^']+)", page_html, re.IGNORECASE)
     if not something_url:
         return None
     something_url = f"https://dood.ws/pass_md5/{something_url.group(1)}"
@@ -411,14 +420,16 @@ def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
         return None
 
     data = response.json()
-    files = sorted([
+    files = sorted(
         [
-            int(x['label'][:-1]),
-            x['file'],
-        ]
-        for x
-        in data['data']
-    ], key=lambda x: x[0])
+            [
+                int(x["label"][:-1]),
+                x["file"],
+            ]
+            for x in data["data"]
+        ],
+        key=lambda x: x[0],
+    )
 
     best_file = files[-1][1]
 
@@ -443,20 +454,24 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
 
     page_html = response.text
 
-    script_tag = BeautifulSoup(page_html, "html.parser").find(
-        lambda tag: tag.name == "script" and "document.getElementById('robotlink')" in str(
-            tag.string)
-    ).string.strip()
+    script_tag = (
+        BeautifulSoup(page_html, "html.parser")
+        .find(
+            lambda tag: tag.name == "script"
+            and "document.getElementById('robotlink')" in str(tag.string)
+        )
+        .string.strip()
+    )
 
     encoded_url = re.search(
-        r'document\.getElementById\(\'robotlink\'\)\.innerHTML\s*=\s*([^;]+)',
+        r"document\.getElementById\(\'robotlink\'\)\.innerHTML\s*=\s*([^;]+)",
         script_tag,
     ).group(1)
 
     payload = f"const url = {encoded_url}; process.stdout.write(url);"
 
     download_url = run_js(payload)
-    if download_url.startswith('//'):
+    if download_url.startswith("//"):
         download_url = f"https:{download_url}"
 
     return DownloadInfo(
@@ -521,11 +536,14 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
     user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
     accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
     scraper = cloudscraper.create_scraper()
-    response = scraper.get(url, headers={
-        "Referer": referer,
-        "User-Agent": user_agent,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-    })
+    response = scraper.get(
+        url,
+        headers={
+            "Referer": referer,
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        },
+    )
     if not response:
         return None
 
@@ -661,55 +679,67 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         if "tracks" not in page_json:
             return None
 
-        keep_characters = (' ', '.', '_', '-')
+        keep_characters = (" ", ".", "_", "-")
 
         def safe_char(c):
             if c.isalnum() or c in keep_characters:
                 return c
-            return '_'
+            return "_"
 
         subtitles = [
             {
                 "lang": track["label"],
-                "file_name": ("".join([
-                    safe_char(c)
-                    for c
-                    in track["label"]
-                ]).rstrip() + ".vtt").replace(r'_+', '_'),
+                "file_name": (
+                    "".join([safe_char(c) for c in track["label"]]).rstrip() + ".vtt"
+                ).replace(r"_+", "_"),
                 "url": track["file"],
             }
-            for track
-            in page_json["tracks"]
+            for track in page_json["tracks"]
             if "captions" == track["kind"]
         ]
         cmd = [
             "ffmpeg",
-            "-i", output_file,
-            *list(chain(*[
-                [
-                    "-i", sub["url"],
-                ]
-                for sub
-                in subtitles
-            ])),
-            "-map", "0",
-            *list(chain(*[
-                [
-                    "-map", str(i + 1),
-                ]
-                for i
-                in range(len(subtitles))
-            ])),
-            "-c", "copy",
-            *list(chain(*[
-                [
-                    # f"-metadata:s:s:{i}", f"name='{sub['lang']}'",
-                    # f"-metadata:s:s:{i}", f"language='{re.search(r'^([a-zA-Z]+)', os.path.basename(urlparse(sub['url']).path)).group(1)}'",
-                    f"-metadata:s:s:{i}", f"language=\"{sub['lang']}\"",
-                ]
-                for i, sub
-                in enumerate(subtitles)
-            ])),
+            "-i",
+            output_file,
+            *list(
+                chain(
+                    *[
+                        [
+                            "-i",
+                            sub["url"],
+                        ]
+                        for sub in subtitles
+                    ]
+                )
+            ),
+            "-map",
+            "0",
+            *list(
+                chain(
+                    *[
+                        [
+                            "-map",
+                            str(i + 1),
+                        ]
+                        for i in range(len(subtitles))
+                    ]
+                )
+            ),
+            "-c",
+            "copy",
+            *list(
+                chain(
+                    *[
+                        [
+                            # f"-metadata:s:s:{i}", f"name='{sub['lang']}'",
+                            # f"-metadata:s:s:{i}", f"language='{re.search(r'^([a-zA-Z]+)', os.path.basename(urlparse(sub['url']).path)).group(1)}'",
+                            f"-metadata:s:s:{i}",
+                            f"language=\"{sub['lang']}\"",
+                        ]
+                        for i, sub in enumerate(subtitles)
+                    ]
+                )
+            ),
             os.path.splitext(output_file)[0] + ".mkv",
         ]
         Console.log_dim("Embedding subtitles...", return_line=True)
@@ -776,7 +806,9 @@ aliases: Dict[str, str] = {
 }
 
 
-def get_download_info(url: str, referer: Union[str, None] = None) -> Union[None, HandlerFuncReturn]:
+def get_download_info(
+    url: str, referer: Union[str, None] = None
+) -> Union[None, HandlerFuncReturn]:
     parsed = urlparse(url)
     domain = parsed.netloc
 
@@ -792,9 +824,9 @@ def get_download_info(url: str, referer: Union[str, None] = None) -> Union[None,
             return handlers[domain](url, referer)
         else:
             return handlers[domain](url)
-    except TypeError:
+    except TypeError as e:
         return handlers[domain](url)
-    except Exception:
+    except Exception as e:
         return None
 
 
@@ -820,7 +852,9 @@ def sort_download_links(
 
         return len(handler_names) + 1
 
-    return list(sorted(
-        urls,
-        key=get_key,
-    ))
+    return list(
+        sorted(
+            urls,
+            key=get_key,
+        )
+    )
