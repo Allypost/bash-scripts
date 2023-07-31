@@ -660,53 +660,20 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         ).attrs["src"]
         player_url = urljoin(response.url, player_url)
         Console.log_dim("Got encrypted response. Breaking...", return_line=True)
-        key_resp = scraper.post(
-            "https://deobfuscator.oracle-arm-1.ji0.li/deobfuscate",
+        sources_resp = scraper.post(
+            "https://player-deobfuscator.fxk.ch/deobfuscate/megacloud.tv",
             json={
-                "url": player_url,
+                "playerUrl": player_url,
+                "cipherText": page_json["sources"],
             },
         ).json()
-        if "message" in key_resp:
+        if "message" in sources_resp:
             Console.clear_line()
-            Console.log_error(key_resp["message"])
+            Console.log_error(sources_resp["message"])
             return None
 
-        key = key_resp["key"]
-        Console.log_dim(
-            f"Got encryption key `{key}'. Decrypting stream info...", return_line=True
-        )
-        current_file_path = os.path.dirname(os.path.realpath(__file__))
-        lib_path = os.path.join(
-            current_file_path,
-            "runners",
-            "libraries",
-            "js",
-            "crypto-js.min.js",
-        )
-
-        with open(lib_path) as f:
-            lib_contents = f.read()
-
-        payload = f"""
-            const CryptoJS = require('./crypto');
-
-            const key = {json.dumps(key)};
-            const sources = {json.dumps(page_json.get('sources'))};
-
-            process.stdout.write(
-                CryptoJS.AES.decrypt(sources, key).toString(CryptoJS.enc.Utf8),
-            );
-        """
-        result = run_js(
-            payload,
-            files=[
-                {
-                    "name": "crypto.js",
-                    "content": lib_contents,
-                },
-            ],
-        )
-        result = result.strip()
+        result = sources_resp["data"]
+        Console.log_dim(f"Got decrypted response.", return_line=True)
 
         try:
             m3u8_url = json.loads(result)[0]["file"]
