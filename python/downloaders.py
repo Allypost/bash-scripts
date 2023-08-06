@@ -1033,6 +1033,58 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
     )
 
 
+def handle__filelions_com(url: str) -> HandlerFuncReturn:
+    class RequestHandler:
+        m3u8_url = None
+        user_agent = None
+        accept_language = None
+        referer = None
+
+        def handle_request(self, req):
+            if self.m3u8_url is not None:
+                return
+
+            parsed = urllib.parse.urlparse(req.url)
+            is_video = parsed.path.endswith(".m3u8")
+
+            if not is_video:
+                return
+
+            self.m3u8_url = req.url
+            self.accept_language = req.headers.get("accept-language")
+            self.user_agent = req.headers.get("user-agent")
+            self.referer = req.headers.get("referer")
+            page.close()
+
+    handler = RequestHandler()
+
+    try:
+        with sync_playwright() as p:
+            browser = p.firefox.launch()
+            page = browser.new_page()
+            page.on("request", handler.handle_request)
+            while handler.m3u8_url is None:
+                try:
+                    page.goto(url)
+                    page.click('#vplayer [aria-label="Play"]', force=True)
+                except Exception:
+                    pass
+
+            browser.close()
+    except playwright.sync_api.Error as err:
+        return None
+
+    return DownloadInfo(
+        url=handler.m3u8_url,
+        referer=handler.referer,
+        headers=[
+            "Accept: */*",
+            f"Accept-Language: {handler.accept_language}",
+            f"User-Agent: {handler.user_agent}",
+        ],
+    )
+
+
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "rapid-cloud.co": handle__rapid_cloud_co,
     "megacloud.tv": handle__megacloud_tv,
@@ -1041,6 +1093,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "fembed-hd.com": handle__fembed_hd_com,
     "dood.ws": handle__dood_ws,
     "ani.googledrive.stream": handle__ani_googledrive_stream,
+    "filelions.com": handle__filelions_com,
     "streamani.net": handle__streamani_net,
     # "sbplay.one": handle__sbplay_one,
     "www.mp4upload.com": handle__www_mp4upload_com,
@@ -1057,6 +1110,7 @@ aliases: Dict[str, str] = {
     "gogoplay.io": "gogoplay1.com",
     "gogoplay4.com": "gogoplay1.com",
     "gogoplay5.com": "gogoplay1.com",
+    "alions.pro": "filelions.com",
     "goload.pro": "gogoplay1.com",
     "gogohd.net": "gogoplay1.com",
     "sbplay1.com": "sbplay.one",
