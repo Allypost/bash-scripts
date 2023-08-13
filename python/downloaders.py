@@ -743,38 +743,39 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             outro_start = int(outro["start"]) * timescale
             outro_end = int(outro["end"]) * timescale
 
-            metadata.chapters.append(
-                Chapter(
-                    title="Pre-intro",
-                    start=0,
-                    end=intro_start - 1,
-                    timebase=Fraction(1, timescale),
+            if intro_start < intro_end and outro_start < outro_end:
+                metadata.chapters.append(
+                    Chapter(
+                        title="Pre-intro",
+                        start=0,
+                        end=intro_start - 1,
+                        timebase=Fraction(1, timescale),
+                    )
                 )
-            )
-            metadata.chapters.append(
-                Chapter(
-                    title="Intro",
-                    start=intro_start,
-                    end=intro_end - 1,
-                    timebase=Fraction(1, timescale),
+                metadata.chapters.append(
+                    Chapter(
+                        title="Intro",
+                        start=intro_start,
+                        end=intro_end - 1,
+                        timebase=Fraction(1, timescale),
+                    )
                 )
-            )
-            metadata.chapters.append(
-                Chapter(
-                    title="Story",
-                    start=intro_end,
-                    end=outro_start - 1,
-                    timebase=Fraction(1, timescale),
+                metadata.chapters.append(
+                    Chapter(
+                        title="Story",
+                        start=intro_end,
+                        end=outro_start - 1,
+                        timebase=Fraction(1, timescale),
+                    )
                 )
-            )
-            metadata.chapters.append(
-                Chapter(
-                    title="Outro",
-                    start=outro_start,
-                    end=outro_end - 1,
-                    timebase=Fraction(1, timescale),
+                metadata.chapters.append(
+                    Chapter(
+                        title="Outro",
+                        start=outro_start,
+                        end=outro_end - 1,
+                        timebase=Fraction(1, timescale),
+                    )
                 )
-            )
 
         keep_characters = (" ", ".", "_", "-")
 
