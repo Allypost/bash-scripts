@@ -1,7 +1,9 @@
+from fractions import Fraction
 import json
 import os
 import re
 import subprocess
+import tempfile
 import urllib.parse
 from dataclasses import dataclass, field
 from itertools import chain
@@ -684,6 +686,96 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         if "tracks" not in page_json:
             return None
 
+        @dataclass
+        class Metadata:
+            title: Union[str, None] = None
+            chapters: list["Chapter"] = field(default_factory=list)
+
+            def has_data(self) -> bool:
+                return self.title is not None or len(self.chapters) > 0
+
+            def __str__(self) -> str:
+                parts = []
+
+                if self.title:
+                    parts.append(f"title={self.title}")
+
+                if self.chapters:
+                    parts.extend(self.chapters)
+
+                ret = ";FFMETADATA1\n"
+                ret += "\n\n".join(map(lambda x: str(x).strip(), parts))
+                return ret.strip()
+
+        @dataclass
+        class Chapter:
+            timebase: Fraction
+            start: int
+            end: int
+            title: Union[str, None] = None
+
+            def __str__(self) -> str:
+                parts = []
+                if self.timebase:
+                    (num, den) = self.timebase.as_integer_ratio()
+                    parts.append(f"TIMEBASE={num}/{den}")
+                if self.start:
+                    parts.append(f"START={str(self.start)}")
+                if self.end:
+                    parts.append(f"END={str(self.end)}")
+                if self.title:
+                    parts.append(f"title={self.title}")
+
+                ret = "[CHAPTER]\n"
+                ret += "\n".join(map(lambda x: x.strip(), parts))
+                return ret.strip()
+
+        metadata = Metadata()
+
+        if "intro" in page_json and "outro" in page_json:
+            intro = page_json["intro"]
+            outro = page_json["outro"]
+            timescale = 1000
+
+            intro_start = int(intro["start"]) * timescale
+            intro_end = int(intro["end"]) * timescale
+
+            outro_start = int(outro["start"]) * timescale
+            outro_end = int(outro["end"]) * timescale
+
+            metadata.chapters.append(
+                Chapter(
+                    title="Pre-intro",
+                    start=0,
+                    end=intro_start - 1,
+                    timebase=Fraction(1, timescale),
+                )
+            )
+            metadata.chapters.append(
+                Chapter(
+                    title="Intro",
+                    start=intro_start,
+                    end=intro_end - 1,
+                    timebase=Fraction(1, timescale),
+                )
+            )
+            metadata.chapters.append(
+                Chapter(
+                    title="Story",
+                    start=intro_end,
+                    end=outro_start - 1,
+                    timebase=Fraction(1, timescale),
+                )
+            )
+            metadata.chapters.append(
+                Chapter(
+                    title="Outro",
+                    start=outro_start,
+                    end=outro_end - 1,
+                    timebase=Fraction(1, timescale),
+                )
+            )
+
         keep_characters = (" ", ".", "_", "-")
 
         def safe_char(c):
@@ -702,34 +794,53 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             for track in page_json["tracks"]
             if "captions" == track["kind"]
         ]
+
+        cleanup_files = []
+
+        cmd_inputs = [
+            (output_file, True),
+        ]
+
+        metadata_cmd = []
+        if metadata.has_data():
+            f = tempfile.NamedTemporaryFile(
+                prefix=f"megacloud_tv_metadata.{item_id}.",
+                suffix=".txt",
+                mode="w+",
+                encoding="utf-8",
+            )
+            f.write(str(metadata))
+            f.flush()
+            cleanup_files.append(f)
+            cmd_inputs.append((f.name, False))
+            metadata_cmd.extend(
+                [
+                    "-map_metadata",
+                    len(cmd_inputs) - 1,
+                ]
+            )
+
+        for sub in subtitles:
+            cmd_inputs.append((sub["url"], True))
+
         cmd = [
             "ffmpeg",
-            "-i",
-            output_file,
             *list(
-                chain(
-                    *[
-                        [
-                            "-i",
-                            sub["url"],
-                        ]
-                        for sub in subtitles
-                    ]
-                )
+                chain(*[["-i", cmd_input] for (cmd_input, _should_map) in cmd_inputs])
             ),
-            "-map",
-            "0",
             *list(
                 chain(
                     *[
                         [
                             "-map",
-                            str(i + 1),
+                            str(i),
                         ]
-                        for i in range(len(subtitles))
+                        for (i, (_cmd_input, should_map)) in enumerate(cmd_inputs)
+                        if should_map
                     ]
                 )
             ),
+            *metadata_cmd,
             "-c",
             "copy",
             *list(
@@ -745,6 +856,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             ),
             os.path.splitext(output_file)[0] + ".mkv",
         ]
+        cmd = list(map(str, cmd))
         Console.log_dim("Embedding subtitles...", return_line=True)
         with subprocess.Popen(
             cmd,
@@ -753,8 +865,14 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             bufsize=1,
             text=True,
         ) as proc:
-            if proc.wait() != 0:
+            res = proc.wait()
+
+            for f in cleanup_files:
+                f.close()
+
+            if res != 0:
                 return None
+
         os.remove(output_file)
 
     if m3u8_url is None:
