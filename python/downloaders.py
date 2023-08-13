@@ -683,6 +683,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             return None
 
     def after_dl(output_file: str, download_info: DownloadInfo):
+        Console.log_dim("Donwnload done. Embedding metadata...", return_line=True)
         if "tracks" not in page_json:
             return None
 
@@ -714,6 +715,19 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             end: int
             title: Union[str, None] = None
 
+            def __post_init__(self):
+                if self.start > self.end:
+                    raise ValueError("Start must be less than end")
+
+                if self.start < 0:
+                    raise ValueError("Start must be greater than 0")
+
+                if self.end < 0:
+                    raise ValueError("End must be greater than 0")
+
+                if self.timebase > 1:
+                    raise ValueError("Timebase must be a fraction less than 1")
+
             def __str__(self) -> str:
                 parts = []
                 if self.timebase:
@@ -744,14 +758,15 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             outro_end = int(outro["end"]) * timescale
 
             if intro_start < intro_end and outro_start < outro_end:
-                metadata.chapters.append(
-                    Chapter(
-                        title="Pre-intro",
-                        start=0,
-                        end=intro_start - 1,
-                        timebase=Fraction(1, timescale),
+                if intro_start > 0:
+                    metadata.chapters.append(
+                        Chapter(
+                            title="Pre-intro",
+                            start=0,
+                            end=intro_start - 1,
+                            timebase=Fraction(1, timescale),
+                        )
                     )
-                )
                 metadata.chapters.append(
                     Chapter(
                         title="Intro",
