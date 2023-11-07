@@ -28,6 +28,10 @@ from playwright.sync_api import sync_playwright
 from .runners.js import run_js
 
 
+REQUEST_TIMEOUT_SECONDS = 10.0
+REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS = 60.0
+
+
 @dataclass
 class DownloadInfo:
     url: str
@@ -77,12 +81,15 @@ def handle__instagram_com(url: str) -> Union[List[str], None]:
         }
 
         api_url = f"https://www.instagram.com/graphql/query/?query_hash={query_hash}&variables={urllib.parse.quote(json.dumps(query_args))}"
-        headers = {
-            "Cookie": session_cookie(),
-            "User-Agent": "Instagram post download script (personal use only I swar)",
-        }
 
-        return requests.get(api_url, headers=headers)
+        return requests.get(
+            api_url,
+            headers={
+                "Cookie": session_cookie(),
+                "User-Agent": "Instagram post download script (personal use only I swar)",
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
 
     url_info = parse_url(raw_url=url)
 
@@ -121,6 +128,7 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
         .get(
             download_page,
             headers={"User-Agent": "Gogo stream video downloader"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .text
     )
@@ -175,6 +183,7 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
         .get(
             download_generator_url,
             headers={"User-Agent": "Gogo stream video downloader"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .text
     )
@@ -191,7 +200,11 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
 def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
     page_html = (
         cloudscraper.create_scraper()
-        .get(url, headers={"User-Agent": "Gogo stream video downloader"})
+        .get(
+            url,
+            headers={"User-Agent": "Gogo stream video downloader"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
         .text
     )
 
@@ -225,6 +238,7 @@ def handle__embedsito_com(url: str) -> HandlerFuncReturn:
                 "referer": url,
             },
             data="r=&d=embedsito.com",
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .json()["data"]
     )
@@ -242,7 +256,14 @@ def handle__embedsito_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
-    page_html = cloudscraper.create_scraper().get(url).text
+    page_html = (
+        cloudscraper.create_scraper()
+        .get(
+            url,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        .text
+    )
     packed_script = (
         BeautifulSoup(page_html, "html.parser")
         .find(
@@ -279,6 +300,7 @@ def handle__play_api_web_site(url: str) -> HandlerFuncReturn:
         data={
             "id": urllib.parse.parse_qs(url_info.query)["id"],
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
     if not request.status_code:
@@ -295,7 +317,10 @@ def handle__play_api_web_site(url: str) -> HandlerFuncReturn:
 
 def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
     def get_embedplus_data(url: str) -> HandlerFuncReturn:
-        response = cloudscraper.create_scraper().get(url)
+        response = cloudscraper.create_scraper().get(
+            url,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
         if not response:
             return None
         page_html = response.text
@@ -380,6 +405,7 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
                 "Referer": url,
                 "x-requested-with": "XMLHttpRequest",
             },
+            timeout=REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS,
         )
 
         if not response:
@@ -448,7 +474,10 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__dood_ws(url: str) -> HandlerFuncReturn:
-    response = cloudscraper.create_scraper().get(url)
+    response = cloudscraper.create_scraper().get(
+        url,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     if not response:
         return None
     page_html = response.text
@@ -464,6 +493,7 @@ def handle__dood_ws(url: str) -> HandlerFuncReturn:
             "User-Agent": "Gogo stream video downloader",
             "Referer": url,
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response:
         return None
@@ -487,6 +517,7 @@ def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
             "Referer": url,
             "x-requested-with": "XMLHttpRequest",
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
     if not response:
@@ -520,6 +551,7 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
             "Referer": url,
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
     if not response:
@@ -616,6 +648,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             "User-Agent": user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response:
         return None
@@ -641,6 +674,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             "User-Agent": user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response:
         return None
@@ -668,6 +702,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
                 "playerUrl": player_url,
                 "cipherText": page_json["sources"],
             },
+            timeout=REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS,
         ).json()
         if "message" in sources_resp:
             Console.clear_line()
@@ -918,6 +953,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             "User-Agent": user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response:
         return None
@@ -943,6 +979,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             "User-Agent": user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
     if not response:
         return None
@@ -969,6 +1006,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             json={
                 "url": player_url,
             },
+            timeout=REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS,
         ).json()
         if "message" in key_resp:
             Console.clear_line()
