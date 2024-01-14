@@ -61,6 +61,11 @@ if [[ -z "$URL" ]]; then
   exit 0
 fi
 
+if command -v meme-downloader &>/dev/null; then
+	meme-downloader "$URL"
+	exit 0
+fi
+
 (
   [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
 

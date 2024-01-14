@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if command -v meme-downloader &>/dev/null; then
+	meme-downloader --fix "$0"
+	exit 0
+fi
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 echo -n "" &&
