@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+NO_FORMAT="\033[0m"
+F_INVERT="\033[7m"
+F_BOLD="\033[1m"
+F_DIM="\033[2m"
+C_GREEN="\033[38;5;2m"
+C_GRAY="\033[38;5;8m"
+C_RED="\033[38;5;9m"
+
+function log() {
+	printf "${F_DIM}[%s]${NO_FORMAT} $1${NO_FORMAT}\n" "$(date +'%Y-%m-%d %H:%M:%S.%3N')" ${@:2}
+}
+
+function info() {
+	log "${C_GREEN}INFO${NO_FORMAT} $*"
+}
+
+function error() {
+	log "${C_RED}ERROR${NO_FORMAT} $*"
+}
+
+function usage() {
+	echo -e "$(
+		cat <<EOF
+Create a new bare repository with folders as branch names
+
+Usage:
+    ${C_GREEN}$(basename "$0")${NO_FORMAT} ${F_DIM}${C_GRAY}[flags]${NO_FORMAT} ${F_DIM}${F_BOLD}<repo_name>${NO_FORMAT}
+	
+Flags:
+    --help, -h ${F_DIM}
+        Show this help text
+		${NO_FORMAT}
+EOF
+	)"
+}
+
+function main() {
+	repo_folder="$1"
+
+	for var in "$@"; do
+		case "$var" in
+		--help | -h)
+			usage
+			exit 0
+			;;
+		esac
+	done
+
+	if [ -z "$repo_folder" ]; then
+		error "Repo name is missing"
+		echo
+		usage
+		exit 1
+	fi
+
+	if [ -d "$repo_folder" ] || [ -f "$repo_folder" ]; then
+		error "File or folder \"$repo_folder\" already exists. Cannot create new repo."
+		exit 1
+	fi
+
+	repo_path="$(realpath "$PWD/$repo_folder")"
+
+	info "Creating bare repo at \"$repo_path\""
+
+	mkdir "$repo_path"
+	cd "$repo_path"
+
+	out="$(git init --bare '.bare' 2>&1)"
+
+	if [ "$?" -ne 0 ]; then
+		error "Failed to create repo:" "$out"
+		exit 1
+	fi
+
+	echo 'gitdir: ./.bare' >.git
+
+	main_branch_name="$(git config --global init.defaultBranch 2>&1)"
+	if [ -z "$main_branch_name" ]; then
+		main_branch_name='main'
+	fi
+
+	out="$(git worktree add --orphan -b "$main_branch_name" "$main_branch_name" 2>&1)"
+	if [ "$?" -ne 0 ]; then
+		error "Failed to create repo:" "$out"
+		exit 1
+	fi
+
+	info "Done!"
+}
+
+main "$@"
