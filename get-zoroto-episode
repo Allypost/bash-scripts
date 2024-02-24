@@ -332,6 +332,7 @@ def main():
                 bufsize=1,
                 text=True,
             ) as proc:
+                Console.log_dim("Waiting for download progress...", return_line=True)
                 for line in proc.stdout:
                     # if download_line_native.search(line):
                     #     status = line.split(" ", maxsplit=1)[1].strip()
@@ -342,17 +343,44 @@ def main():
                     if line[0] == "[":
                         continue
                     break
+
                 # Read status block
+                def s(key, pad=0):
+                    return output_status_info.get(key, "???").rjust(pad, " ")
+
+                def format_output():
+                    out = []
+                    for item in output_layout:
+                        if isinstance(item, dict):
+                            for name, s_args in item.items():
+                                if s_args[0] not in output_status_info:
+                                    continue
+                                out.append(f"{name}={s(*s_args)}")
+                            continue
+                        out.append(item)
+                    return " ".join(out)
+
+                output_status_info = {}
+                output_layout = [
+                    {"time": ("out_time",)},
+                    "|",
+                    {
+                        "fps": ("fps", 6),
+                        "speed": ("speed", 6),
+                        "bitrate": ("bitrate", 13),
+                    },
+                    "|",
+                    {"size": ("total_size",)},
+                ]
                 while proc.poll() is None:
                     try:
-                        status = {}
                         for line in proc.stdout:
                             if line.startswith("progress="):
                                 break
                             key, value = line.strip().split("=", maxsplit=1)
-                            status[key.strip()] = value.strip()
+                            output_status_info[key.strip()] = value.strip()
                         Console.log_dim(
-                            f"time={status['out_time']} | fps={status['fps'].rjust(6, ' ')} speed={status['speed'].rjust(5, ' ')} bitrate={status['bitrate'].rjust(13, ' ')} | size={status['total_size']}",
+                            format_output(),
                             return_line=True,
                         )
                     except:
