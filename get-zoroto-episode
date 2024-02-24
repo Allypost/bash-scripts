@@ -22,6 +22,12 @@ from python.log.console import Chalk, Console
 
 BASE_URL = "https://aniwatch.to"
 
+ALLOWED_SERIES_TYPES = {
+    "sub",
+    "dub",
+    "raw",
+}
+
 
 def get_zoroto_page_url(anime_name: str) -> str:
     return f"{BASE_URL}/watch/{anime_name}"
@@ -233,8 +239,10 @@ def main():
     if series_name is None:
         raise Exception("No series name")
 
-    if series_type != "sub" and series_type != "dub":
-        raise Exception("Wrong series type (must be `sub' or `dub')")
+    if series_type not in ALLOWED_SERIES_TYPES:
+        raise Exception(
+            f"Invalid series type (must be one of: {', '.join(ALLOWED_SERIES_TYPES)})"
+        )
 
     episode_number_offset = argv.offset
     episode_number = get_episode_number_to_download(argv) - episode_number_offset
@@ -383,7 +391,7 @@ def main():
                             format_output(),
                             return_line=True,
                         )
-                    except:
+                    except Exception:
                         pass
 
                 if proc.wait() != 0:
