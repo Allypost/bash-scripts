@@ -4,20 +4,21 @@ filename="${1##*/}"                    # Strip longest match of */ from start
 base="${filename%.[^.]*}"              # Strip shortest match of . plus at least one non-dot char from end
 ext="${filename:${#base}+1}"           # Substring from len of base thru end
 if [[ -z "$base" && -n "$ext" ]]; then # If we have an extension and no base, it's really the base
-    base=".$ext"
-    ext=""
+	base=".$ext"
+	ext=""
 fi
 
 outname="$(dirname "$1")/$base.s.mp4"
 
+# -map 0:v -map 0:a \
+# -b:a 280k \
 ffmpeg \
-    -i "$1" \
-    -max_muxing_queue_size 1024 \
-    -c:v libx264 -crf 29 \
-    -map 0:v -map 0:a -af channelmap=0 \
-    -vf "scale=-2:480" -preset slow -movflags faststart \
-    -b:a 280k \
-    -map_metadata -1 \
-    "$outname"
+	-i "$1" \
+	-max_muxing_queue_size 1024 \
+	-c:v libx264 -crf 29 \
+	-af channelmap=0 \
+	-vf "scale=-2:480" -preset slow -movflags faststart \
+	-map_metadata -1 \
+	"$outname"
 
 touch -r "$1" "$outname"
