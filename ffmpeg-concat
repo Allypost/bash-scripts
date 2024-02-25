@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+NO_FORMAT="\033[0m"
+F_BOLD="\033[1m"
+F_DIM="\033[2m"
+C_GREEN="\033[38;5;2m"
+C_GRAY="\033[38;5;8m"
+C_RED="\033[38;5;9m"
+
+function log() {
+	printf "${F_DIM}[%s]${NO_FORMAT} $1${NO_FORMAT}\n" "$(date +'%Y-%m-%d %H:%M:%S.%3N')" ${@:2}
+}
+
+function info() {
+	log "${C_GREEN}INFO${NO_FORMAT} $*"
+}
+
+function error() {
+	log "${C_RED}ERROR${NO_FORMAT} $*"
+}
+
+function usage() {
+	echo -e "$(
+		cat <<EOF
+Concaternate two video files into a new file.
+
+Usage:
+    ${C_GREEN}$(basename "$0")${NO_FORMAT} ${F_DIM}${C_GRAY}[flags]${NO_FORMAT} ${F_DIM}${F_BOLD}<file1> <file2> <output_file>${NO_FORMAT}
+
+Flags:
+    --help, -h ${F_DIM}
+        Show this help text
+		${NO_FORMAT}
+EOF
+	)"
+}
+
+function main() {
+	file_1="$1"
+	file_2="$2"
+	file_out="$3"
+
+	for var in "$@"; do
+		case "$var" in
+		--help | -h)
+			usage
+			exit 0
+			;;
+		esac
+	done
+
+	if [ -z "$file_1" ]; then
+		printf "First file: ${F_BOLD}"
+		read -r file_1
+		printf "${NO_FORMAT}"
+	fi
+
+	if [ ! -f "$file_1" ]; then
+		error "File $file_1 not found"
+		printf "${NO_FORMAT}"
+		exit 1
+	fi
+
+	if [ -z "$file_2" ]; then
+		printf "Second file: ${F_BOLD}"
+		read -r file_2
+		printf "${NO_FORMAT}"
+	fi
+
+	if [ ! -f "$file_2" ]; then
+		error "File $file_2 not found"
+		printf "${NO_FORMAT}"
+		exit 1
+	fi
+
+	if [ -z "$file_out" ]; then
+		printf "Output file: ${F_BOLD}"
+		printf "${NO_FORMAT}"
+		read -r file_out
+	fi
+
+	ffmpeg \
+		-i "$file_1" \
+		-i "$file_2" \
+		-filter_complex \
+		"[0:v][0:a][1:v][1:a] concat=n=2:v=1:a=1 [outv] [outa]" \
+		-map "[outv]" -map "[outa]" \
+		"$file_out"
+}
