@@ -10,14 +10,17 @@ import subprocess
 from dataclasses import dataclass
 from itertools import chain
 import sys
-from typing import Dict
+import types
+from typing import Dict, TypeVar
 
 import cloudscraper
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet
 
 from python.downloaders import get_download_info, sort_download_links
+from python.helpers.list import flatten
 from python.helpers.main import get_episode_number_to_download, parse_arguments
+from python.helpers.size import human_byte_size
 from python.log.console import Chalk, Console
 
 BASE_URL = "https://aniwatch.to"
@@ -353,32 +356,64 @@ def main():
                     break
 
                 # Read status block
-                def s(key, pad=0):
-                    return output_status_info.get(key, "???").rjust(pad, " ")
+                def s(key, pad=0, *, default="???"):
+                    return output_status_info.get(key, default).rjust(pad, " ")
+
+                def s_if(key, pad=0, *, default="???"):
+                    if key in output_status_info:
+                        return s(key=key, pad=pad, default=default)
+                    return None
+
+                T = TypeVar("T")
+
+                def chain_if(initial: T, *processors: types.FunctionType):
+                    fns = flatten(list(processors))
+                    for fn in fns:
+                        if initial is None:
+                            break
+                        initial = fn(initial)
+                    return initial
 
                 def format_output():
                     out = []
                     for item in output_layout:
-                        if isinstance(item, dict):
-                            for name, s_args in item.items():
-                                if s_args[0] not in output_status_info:
-                                    continue
-                                out.append(f"{name}={s(*s_args)}")
-                            continue
-                        out.append(item)
+                        match item:
+                            case dict():
+                                for name, value in item.items():
+                                    match value:
+                                        case gen if callable(gen):
+                                            res = gen()
+                                            if res is not None:
+                                                out.append(f"{name}={res}")
+                                        case None:
+                                            out.append(f"{name}")
+                                        case value:
+                                            out.append(f"{name}={value}")
+                            case gen if callable(gen):
+                                res = gen()
+                                if res is not None:
+                                    out.append(res)
+                            case value:
+                                out.append(str(value))
                     return " ".join(out)
 
                 output_status_info = {}
                 output_layout = [
-                    {"time": ("out_time",)},
+                    {"time": lambda: s_if("out_time")},
                     "|",
                     {
-                        "fps": ("fps", 6),
-                        "speed": ("speed", 6),
-                        "bitrate": ("bitrate", 13),
+                        "fps": lambda: s_if("fps", 6),
+                        "speed": lambda: s_if("speed", 5),
+                        "bitrate": lambda: s_if("bitrate", 6),
                     },
                     "|",
-                    {"size": ("total_size",)},
+                    {
+                        "size": lambda: chain_if(
+                            s_if("total_size"),
+                            lambda x: str(x).strip(),
+                            lambda x: human_byte_size(x),
+                        )
+                    },
                 ]
                 while proc.poll() is None:
                     try:

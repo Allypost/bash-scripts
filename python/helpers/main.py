@@ -17,14 +17,14 @@ def parse_arguments(
         "series",
         help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
         type=str,
-        nargs='?',
+        nargs="?",
     )
 
     parser.add_argument(
         "-n, --series-name",
         help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
         type=str,
-        nargs='?',
+        nargs="?",
         dest="series_name",
     )
 
@@ -32,7 +32,7 @@ def parse_arguments(
         "-e, --episode",
         help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
         type=float,
-        nargs='?',
+        nargs="?",
         required=False,
         default=None,
         dest="episode",
