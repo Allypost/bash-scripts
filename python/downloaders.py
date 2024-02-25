@@ -935,7 +935,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         headers=[
             "Accept: */*",
             f"Accept-Language: {accept_language}",
-            "Origin: https://rapid.cloud.co",
+            "Origin: https://rapid-cloud.co",
             f"User-Agent: {user_agent}",
         ],
         after_dl=after_dl,
