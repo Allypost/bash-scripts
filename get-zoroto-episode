@@ -23,7 +23,7 @@ from python.helpers.main import get_episode_number_to_download, parse_arguments
 from python.helpers.size import human_byte_size
 from python.log.console import Chalk, Console
 
-BASE_URL = "https://aniwatch.to"
+BASE_URL = "https://hianime.to"
 
 ALLOWED_SERIES_TYPES = {
     "sub",
