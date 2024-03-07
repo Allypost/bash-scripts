@@ -86,3 +86,5 @@ function main() {
 		-map "[outv]" -map "[outa]" \
 		"$file_out"
 }
+
+main "$@"
