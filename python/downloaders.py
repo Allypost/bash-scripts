@@ -248,9 +248,7 @@ def handle__embedsito_com(url: str) -> HandlerFuncReturn:
             resp,
             key=lambda k: int(k["label"][:-1]),
             reverse=True,
-        )[
-            0
-        ]["file"],
+        )[0]["file"],
         referer=url,
     )
 
@@ -935,7 +933,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         headers=[
             "Accept: */*",
             f"Accept-Language: {accept_language}",
-            "Origin: https://rapid-cloud.co",
+            # "Origin: https://rapid-cloud.co",
             f"User-Agent: {user_agent}",
         ],
         after_dl=after_dl,
@@ -1002,7 +1000,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         player_url = urljoin(response.url, player_url)
         Console.log_dim("Got encrypted response. Breaking...", return_line=True)
         key_resp = scraper.post(
-            "https://deobfuscator.oracle-arm-1.ji0.li/deobfuscate",
+            "https://player-deobfuscator.fxk.ch/deobfuscate",
             json={
                 "url": player_url,
             },
@@ -1198,7 +1196,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         headers=[
             "Accept: */*",
             f"Accept-Language: {accept_language}",
-            "Origin: https://rapid.cloud.co",
+            # "Origin: https://rapid.cloud.co",
             f"User-Agent: {user_agent}",
         ],
         after_dl=after_dl,
@@ -1328,7 +1326,7 @@ def sort_download_links(
     urls: List[T],
     *,
     to_url: Callable[[T], str] = lambda x: x,
-) -> List[str]:
+) -> List[T]:
     handler_names = list(handlers.keys())
 
     def get_key(item: T) -> int:
