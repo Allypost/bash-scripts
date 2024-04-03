@@ -7,11 +7,12 @@ import multiprocessing
 import re
 import signal
 import subprocess
-from dataclasses import dataclass
-from itertools import chain
 import sys
 import types
-from typing import Dict, TypeVar
+import urllib.parse
+from dataclasses import dataclass
+from itertools import chain
+from typing import Dict, TypeVar, Union, Set
 
 import cloudscraper
 from bs4 import BeautifulSoup
@@ -30,6 +31,8 @@ ALLOWED_SERIES_TYPES = {
     "dub",
     "raw",
 }
+
+FORBIDDEN_CDN_URLS = {"ed.netmagcdn.com"}
 
 
 def get_zoroto_page_url(anime_name: str) -> str:
@@ -162,8 +165,11 @@ def get_download_url_from_server_info(
 
 def get_anime_episode_download_server_list(
     episode: EpisodeInfo,
-    series_type: str = "sub",
+    series_type: Union[str, Set] = "sub",
 ) -> Dict[str, DownloadInfo] | None:
+    if isinstance(series_type, str):
+        series_type = {series_type}
+
     Console.log_dim("Fetching download servers...", return_line=True)
     response = get_page(
         f"{BASE_URL}/ajax/v2/episode/servers?episodeId={episode.id}",
@@ -201,7 +207,7 @@ def get_anime_episode_download_server_list(
                 get_download_url_from_server_info,
                 servers_infos.values(),
             )
-            if item and item.type == series_type
+            if item and item.type in series_type
         ]
 
     return results
@@ -270,13 +276,16 @@ def main():
         Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
         exit(1)
 
+    if series_type == "sub":
+        series_type = {"sub", "raw"}
     download_sites = get_anime_episode_download_server_list(
-        episodes[episode_number],
-        series_type,
+        episodes[episode_number], series_type
     )
 
     if not download_sites:
-        Console.log_error(f"Couldn't download {episode_number}")
+        Console.log_error(
+            f"Couldn't download {episode_number}: No download servers found"
+        )
         exit(1)
 
     sorted_download_site_urls = sort_download_links(
@@ -305,8 +314,16 @@ def main():
                 f"{number_format % (episode_number + episode_number_offset)}.mp4"
             )
 
+            parsed_url = urllib.parse.urlparse(url)
+
+            if parsed_url.hostname in FORBIDDEN_CDN_URLS:
+                Console.log(
+                    f"{Chalk.colour(Chalk.italic)}Skipping {site}: {url}{Chalk.colour('23m')}"
+                )
+                # continue
+
             Console.log(
-                f"{Chalk.colour(Chalk.italic)}Downloading from {site}{Chalk.colour('23m')}"
+                f"{Chalk.colour(Chalk.italic)}Downloading from {site}: {url}{Chalk.colour('23m')}"
             )
 
             Console.log_dim("Starting download...", return_line=True)
@@ -450,7 +467,9 @@ def main():
 
     Console.clear_line()
     Console.move_up(processed)
-    Console.log_error(f"Failed to download episode {episode_number}")
+    Console.log_error(
+        f"Failed to download episode {episode_number}: No handlers succeeded"
+    )
     exit(1)
 
 
