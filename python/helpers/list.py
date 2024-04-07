@@ -1,13 +1,14 @@
-from typing import List, Tuple, TypeVar, Union
+from itertools import chain
+from typing import TypeAlias, TypeVar
 
 T = TypeVar("T")
-Listish = List[T] | Tuple[T]
-MaybeList = T | Listish[T]
+Listish: TypeAlias = list[T] | tuple[T, ...]
+MaybeList: TypeAlias = T | Listish[T]
 
 
-def flatten(l: MaybeList[T] | Listish[MaybeList[T]]) -> List[T]:
-    if l == []:
-        return l
-    if isinstance(l[0], list):
-        return flatten(l[0]) + flatten(l[1:])
-    return l[:1] + flatten(l[1:])
+def flatten(
+    lst: MaybeList[Listish[T]],
+) -> list[T]:
+    if isinstance(lst, list) or isinstance(lst, tuple):
+        return list(chain.from_iterable(flatten(x) for x in lst))  # type: ignore
+    return [lst]

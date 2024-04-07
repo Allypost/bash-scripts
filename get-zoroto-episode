@@ -2,17 +2,17 @@
 
 import argparse
 import atexit
+from collections.abc import Callable
 import json
 import multiprocessing
 import re
 import signal
 import subprocess
 import sys
-import types
 import urllib.parse
 from dataclasses import dataclass
 from itertools import chain
-from typing import Dict, TypeVar, Union, Set
+from typing import TypeVar, Union
 
 import cloudscraper
 from bs4 import BeautifulSoup
@@ -60,16 +60,17 @@ def get_anime_id(anime_name: str) -> str | None:
     Console.log_dim("Parsing HTML...", return_line=True)
 
     try:
-        info = (
-            BeautifulSoup(
-                page_html,
-                "html.parser",
-            )
-            .find(
-                id="syncData",
-            )
-            .text
+        info = BeautifulSoup(
+            page_html,
+            "html.parser",
+        ).find(
+            id="syncData",
         )
+
+        if info is None:
+            return None
+
+        info = info.text
 
         return json.loads(info)["anime_id"]
     except Exception:
@@ -95,7 +96,7 @@ def get_page(url: str):
     )
 
 
-def get_anime_episode_list(anime_id: str) -> Dict[float, str]:
+def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
     Console.log_dim("Fetching episode list...", return_line=True)
     response = get_page(
         f"{BASE_URL}/ajax/v2/episode/list/{anime_id}",
@@ -165,8 +166,8 @@ def get_download_url_from_server_info(
 
 def get_anime_episode_download_server_list(
     episode: EpisodeInfo,
-    series_type: Union[str, Set] = "sub",
-) -> Dict[str, DownloadInfo] | None:
+    series_type: Union[str, set] = "sub",
+) -> list[DownloadInfo] | None:
     if isinstance(series_type, str):
         series_type = {series_type}
 
@@ -361,7 +362,7 @@ def main():
                 text=True,
             ) as proc:
                 Console.log_dim("Waiting for download progress...", return_line=True)
-                for line in proc.stdout:
+                for line in proc.stdout or []:
                     # if download_line_native.search(line):
                     #     status = line.split(" ", maxsplit=1)[1].strip()
                     #     Console.log_dim(status, return_line=True)
@@ -373,7 +374,7 @@ def main():
                     break
 
                 # Read status block
-                def s(key, pad=0, *, default="???"):
+                def s(key, pad=0, *, default="???") -> str:
                     return output_status_info.get(key, default).rjust(pad, " ")
 
                 def s_if(key, pad=0, *, default="???"):
@@ -383,8 +384,10 @@ def main():
 
                 T = TypeVar("T")
 
-                def chain_if(initial: T, *processors: types.FunctionType):
-                    fns = flatten(list(processors))
+                def chain_if(
+                    initial: T | None, *processors: Callable[[T], T]
+                ) -> T | None:
+                    fns = flatten(processors)
                     for fn in fns:
                         if initial is None:
                             break
@@ -434,7 +437,7 @@ def main():
                 ]
                 while proc.poll() is None:
                     try:
-                        for line in proc.stdout:
+                        for line in proc.stdout or []:
                             if line.startswith("progress="):
                                 break
                             key, value = line.strip().split("=", maxsplit=1)
