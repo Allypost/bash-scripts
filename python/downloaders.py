@@ -12,7 +12,7 @@ from urllib.parse import urljoin, urlparse
 
 import cloudscraper
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from python.log.console import Console
 
@@ -660,7 +660,9 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
     if not player_embed_el:
         return None
 
-    item_id = player_embed_el.attrs["data-id"]
+    item_id = (
+        player_embed_el.attrs["data-id"] if isinstance(player_embed_el, Tag) else None
+    )
 
     if not item_id:
         return None
@@ -682,10 +684,12 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
     if not page_json:
         return None
 
-    encrypted = page_json.get("encrypted") == True
-
     m3u8_url = None
-    if encrypted:
+    sources = page_json.get("sources")
+    if isinstance(sources, list):
+        if len(sources) > 0:
+            m3u8_url = page_json.get("sources")[0].get("file")
+    else:
         player_url = next(
             x
             for x in page_parsed.find_all("script")
