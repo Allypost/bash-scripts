@@ -6,6 +6,11 @@ C_GREEN="\033[38;5;2m"
 C_GRAY="\033[38;5;8m"
 C_RED="\033[38;5;9m"
 
+if [ -n "$DEBUG" ]; then
+	set -e
+fi
+set -euo pipefail
+
 function log() {
 	printf "${F_DIM}[%s]${NO_FORMAT} $1${NO_FORMAT}\n" "$(date +'%Y-%m-%d %H:%M:%S.%3N')" ${@:2}
 }
@@ -21,70 +26,61 @@ function error() {
 function usage() {
 	echo -e "$(
 		cat <<EOF
-Concaternate two video files into a new file.
+Concaternate multiple video files into a new file.
 
 Usage:
-    ${C_GREEN}$(basename "$0")${NO_FORMAT} ${F_DIM}${C_GRAY}[flags]${NO_FORMAT} ${F_DIM}${F_BOLD}<file1> <file2> <output_file>${NO_FORMAT}
+    ${C_GREEN}$(basename "$0")${NO_FORMAT} ${F_DIM}${C_GRAY}[flags]${NO_FORMAT} ${F_DIM}--output ${F_BOLD}<output_file> ...<file>${NO_FORMAT}
 
 Flags:
-    --help, -h ${F_DIM}
-        Show this help text
-		${NO_FORMAT}
+    -h, --help ${F_DIM}
+      Show this help text${NO_FORMAT}
+    -o, --output ${F_DIM}
+      Output file${NO_FORMAT}
 EOF
 	)"
 }
 
 function main() {
-	file_1="$1"
-	file_2="$2"
-	file_out="$3"
+	eval set -- "$(getopt --options 'ho:' --long 'help,output:' -- "$@")"
 
-	for var in "$@"; do
-		case "$var" in
+	file_out=""
+	for opt; do
+		case "$opt" in
+		--output | -o)
+			file_out="$2"
+			shift 2
+			;;
 		--help | -h)
 			usage
 			exit 0
 			;;
+		--)
+			shift 1
+			break
+			;;
 		esac
 	done
 
-	if [ -z "$file_1" ]; then
-		printf "First file: ${F_BOLD}"
-		read -r file_1
-		printf "${NO_FORMAT}"
-	fi
-
-	if [ ! -f "$file_1" ]; then
-		error "File $file_1 not found"
-		printf "${NO_FORMAT}"
-		exit 1
-	fi
-
-	if [ -z "$file_2" ]; then
-		printf "Second file: ${F_BOLD}"
-		read -r file_2
-		printf "${NO_FORMAT}"
-	fi
-
-	if [ ! -f "$file_2" ]; then
-		error "File $file_2 not found"
-		printf "${NO_FORMAT}"
-		exit 1
-	fi
-
 	if [ -z "$file_out" ]; then
-		printf "Output file: ${F_BOLD}"
-		printf "${NO_FORMAT}"
-		read -r file_out
+		error "The -o flag is required"
+		usage
+		exit 1
 	fi
 
-	ffmpeg \
-		-i "$file_1" \
-		-i "$file_2" \
-		-filter_complex \
-		"[0:v][0:a][1:v][1:a] concat=n=2:v=1:a=1 [outv] [outa]" \
-		-map "[outv]" -map "[outa]" \
-		"$file_out"
+	ffmpeg_cmd=("ffmpeg")
+	filter_complex=""
+	i=0
+	for f in "$@"; do
+		ffmpeg_cmd+=("-i" "$f")
+		filter_complex+="[$i:v][$i:a]"
+		i="$((i + 1))"
+	done
+	filter_complex+=" concat=n=$i:v=1:a=1 [outv] [outa]"
+	ffmpeg_cmd+=(-filter_complex "$filter_complex")
+	ffmpeg_cmd+=(-map '[outv]' -map '[outa]' -preset 'slow')
+	ffmpeg_cmd+=("$file_out")
+
+	"${ffmpeg_cmd[@]}"
 }
 
 main "$@"
