@@ -14,6 +14,7 @@ import cloudscraper
 import requests
 from bs4 import BeautifulSoup, Tag
 
+from python.helpers.deobfuscator import DefaultPlayerDeobfuscator
 from python.log.console import Console
 
 try:
@@ -698,21 +699,26 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         ).attrs["src"]
         player_url = urljoin(response.url, player_url)
         Console.log_dim("Got encrypted response. Breaking...", return_line=True)
-        sources_resp = scraper.post(
-            "https://player-deobfuscator.fxk.ch/deobfuscate/megacloud.tv",
+        sources_resp = DefaultPlayerDeobfuscator.post(
+            "/deobfuscate/megacloud.tv",
             json={
                 "playerUrl": player_url,
                 "cipherText": page_json["sources"],
             },
             timeout=REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS,
-        ).json()
+            validate_status=False,
+        )
+        if not sources_resp:
+            Console.clear_line()
+            Console.log_error("Failed to deobfuscate sources. Got no response.")
+            return None
         if "message" in sources_resp:
             Console.clear_line()
             Console.log_error(sources_resp["message"])
             return None
 
         result = sources_resp["data"]
-        Console.log_dim(f"Got decrypted response.", return_line=True)
+        Console.log_dim("Got decrypted response.", return_line=True)
 
         try:
             m3u8_url = json.loads(result)[0]["file"]
@@ -1003,13 +1009,18 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         ).attrs["src"]
         player_url = urljoin(response.url, player_url)
         Console.log_dim("Got encrypted response. Breaking...", return_line=True)
-        key_resp = scraper.post(
-            "https://player-deobfuscator.fxk.ch/deobfuscate",
+        key_resp = DefaultPlayerDeobfuscator.post(
+            "/deobfuscate",
             json={
                 "url": player_url,
             },
             timeout=REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS,
-        ).json()
+            validate_status=False,
+        )
+        if not key_resp:
+            Console.clear_line()
+            Console.log_error("Could not get encryption key. Got no response.")
+            return None
         if "message" in key_resp:
             Console.clear_line()
             Console.log_error(key_resp["message"])
