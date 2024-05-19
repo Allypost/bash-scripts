@@ -28,11 +28,11 @@ class Chalk:
 
     @staticmethod
     def esc(string):
-        return f"\x1B[{string}"
+        return f"\x1b[{string}"
 
     @staticmethod
     def badge(text: Union[str, float, int], *colours: str) -> str:
-        return f"{Chalk.colour(colours)} {text} {Chalk.esc('0m')}"
+        return f"{Chalk.colour(list(colours))} {text} {Chalk.esc('0m')}"
 
     @staticmethod
     def colour(*colours: Union[List[str], Tuple[str], str]) -> str:
@@ -48,7 +48,7 @@ class Console:
 
     @staticmethod
     def esc(string: str):
-        return f"\x1B[{string}"
+        return f"\x1b[{string}"
 
     @staticmethod
     def move_up(lines: Union[str, int]):
