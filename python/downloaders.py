@@ -512,27 +512,28 @@ def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
         )
         .text
     )
-    packed_script = (
-        BeautifulSoup(page_html, "html.parser")
-        .find(
-            lambda tag: tag.name == "script"
-            and "function(p,a,c,k,e,d)" in str(tag.string)
-        )
-        .string
+    script_with_src = BeautifulSoup(page_html, "html.parser").find(
+        lambda tag: tag.name == "script" and " src: " in str(tag.string)
     )
 
-    payload = f"""
-    const fn = {packed_script[4:]}
-    console.log(fn.toString());
-    """
-    r = run_js(payload)
+    if isinstance(script_with_src, Tag):
+        script_with_src = script_with_src.string
+    else:
+        script_with_src = None
 
-    # Better: video_url = re.match(r'player\.src\("([^"]+)"\)', r)
-    video_url = next(x for x in r.split("player.") if x.startswith('src("')).strip()[
-        5:-3
-    ]
+    if not script_with_src:
+        return None
 
-    return DownloadInfo(url=video_url, referer=url)
+    src_match = re.search(r'\s*src:\s*"([^"]+)"', script_with_src)
+    if not src_match:
+        return None
+    src_match = src_match.group(1)
+    if not src_match:
+        return None
+
+    src_match = src_match.replace('\\"', '"')
+
+    return DownloadInfo(url=src_match, referer=url)
 
 
 def handle__ani_googledrive_stream(url: str) -> HandlerFuncReturn:
