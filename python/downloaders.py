@@ -503,6 +503,56 @@ def handle__embedsito_com(url: str) -> HandlerFuncReturn:
     )
 
 
+def handle__filemoon_sx(url: str) -> HandlerFuncReturn:
+    page_html = (
+        cloudscraper.create_scraper()
+        .get(
+            url,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        .text
+    )
+    packed_script = BeautifulSoup(page_html, "html.parser").find(
+        lambda tag: tag.name == "script" and "function(p,a,c,k,e,d)" in str(tag.string)
+    )
+
+    if isinstance(packed_script, Tag):
+        packed_script = packed_script.string
+    else:
+        return None
+
+    if not packed_script:
+        return None
+
+    payload_regex = r"/videop\.setup\((\{.*?\})\);/"
+    payload = f"""
+    const fn = {packed_script[4:]}
+    const fnStr = fn.toString();
+    const fnDataMatch = {payload_regex}.exec(fnStr);
+    const fnData = fnDataMatch[1];
+    eval(`var fnFinalData = ${"{" + "fnData}"}`);
+    console.log(JSON.stringify(fnFinalData));
+    """
+    r = run_js(payload)
+
+    if not r:
+        return None
+
+    try:
+        video_info = json.loads(r)
+        sources = video_info["sources"]
+        if len(sources) == 0:
+            return None
+
+        source = sources[0]
+
+        video_url = source["file"]
+    except Exception:
+        return None
+
+    return DownloadInfo(url=video_url, referer=url)
+
+
 def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
     page_html = (
         cloudscraper.create_scraper()
@@ -1520,7 +1570,10 @@ def handle__filelions_com(url: str) -> HandlerFuncReturn:
     )
 
 
-handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
+handlers: Dict[
+    str,
+    Union[Callable[[str], HandlerFuncReturn], Callable[[str, str], HandlerFuncReturn]],
+] = {
     "rapid-cloud.co": handle__rapid_cloud_co,
     "megacloud.tv": handle__megacloud_tv,
     "vidplay.xyz": handle__vidplay_xyz,
@@ -1537,6 +1590,7 @@ handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "mixdrop.co": handle__mixdrop_co,
     "play.api-web.site": handle__play_api_web_site,
     "streamtape.net": handle__streamtape_net,
+    "filemoon.sx": handle__filemoon_sx,
 }
 
 aliases: Dict[str, str] = {
@@ -1560,6 +1614,7 @@ aliases: Dict[str, str] = {
     "fembed9hd.com": "fembed-hd.com",
     "vid142.site": "vidplay.xyz",
     "mcloud.bz": "vidplay.xyz",
+    "kerapoxy.cc": "filemoon.com",
 }
 
 
@@ -1593,7 +1648,7 @@ T = TypeVar("T")
 def sort_download_links(
     urls: List[T],
     *,
-    to_url: Callable[[T], str] = lambda x: x,
+    to_url: Callable[[T], str] = lambda x: str(x),
 ) -> List[T]:
     handler_names = list(handlers.keys())
 
