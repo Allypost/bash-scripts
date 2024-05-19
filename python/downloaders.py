@@ -7,8 +7,8 @@ import tempfile
 import urllib.parse
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Callable, Dict, List, TypeVar, Union
-from urllib.parse import urljoin, urlparse
+from typing import Callable, Dict, List, TypeVar, Union, cast
+from urllib.parse import urljoin, urlparse, quote_plus as encode_url_component
 
 import cloudscraper
 import requests
@@ -223,6 +223,255 @@ def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
         return None
 
     return DownloadInfo(url=download_url, referer=url)
+
+
+def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
+    parsed_url = urllib.parse.urlparse(url)
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    scraper = cloudscraper.create_scraper()
+
+    page_url_id = parsed_url.path.split("/")[-1]
+
+    Console.log_dim("Got encrypted response. Breaking...", return_line=True)
+
+    futoken_js = scraper.get(
+        f"{base_url}/futoken?{parsed_url.query}",
+        headers={
+            "Referer": url,
+            "Accept": "*/*",
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    if not futoken_js:
+        return None
+
+    futoken_js = futoken_js.text
+    futoken = re.search(r"{var\s+[\w]+\s*=\s*'([^']+)'[\W]", futoken_js)
+    if not futoken:
+        return None
+    futoken = futoken.group(1)
+    if not futoken:
+        return None
+    futoken = futoken.replace("\\'", "'")
+
+    item_id_resp = DefaultPlayerDeobfuscator.with_http(scraper).get(
+        f"/vrf/vidplay?vrf_data={encode_url_component(page_url_id)}",
+    )
+    if not item_id_resp:
+        return None
+
+    Console.log_dim("Got decrypted response. Fetching sources...", return_line=True)
+
+    try:
+        item_id = item_id_resp["vrf"]
+    except Exception:
+        return None
+
+    encoded_data: list[str] = [futoken]
+    for i, c in enumerate(item_id):
+        encoded_data.append(str(ord(futoken[i % len(futoken)]) + ord(c)))
+
+    resp = scraper.get(
+        f"{base_url}/mediainfo/{",".join(encoded_data)}?{parsed_url.query}",
+        headers={
+            "Accept": "text/javascript, */*; q=0.01",
+            "Referer": url,
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+
+    if not resp.ok:
+        return None
+
+    try:
+        resp_json = resp.json()["result"]
+        sources = list(resp_json["sources"])
+
+        if len(sources) > 1:
+            print("Found multiple sources, using the first one", sources)
+
+        Console.log_dim("Got sources.", return_line=True)
+
+        source = dict(sources[0])
+
+        if len(dict(source).keys()) > 1:
+            print("Found multiple formats, using the first one", source)
+
+        tracks = source.get("tracks")
+
+        def after_dl(output_file: str, download_info: DownloadInfo):
+            Console.log_dim("Donwnload done. Embedding metadata...", return_line=True)
+            if not tracks:
+                return None
+
+            @dataclass
+            class Metadata:
+                title: Union[str, None] = None
+                chapters: list["Chapter"] = field(default_factory=list)
+
+                def has_data(self) -> bool:
+                    return self.title is not None or len(self.chapters) > 0
+
+                def __str__(self) -> str:
+                    parts = []
+
+                    if self.title:
+                        parts.append(f"title={self.title}")
+
+                    if self.chapters:
+                        parts.extend(self.chapters)
+
+                    ret = ";FFMETADATA1\n"
+                    ret += "\n\n".join(map(lambda x: str(x).strip(), parts))
+                    return ret.strip()
+
+            @dataclass
+            class Chapter:
+                timebase: Fraction
+                start: int
+                end: int
+                title: Union[str, None] = None
+
+                def __post_init__(self):
+                    if self.start > self.end:
+                        raise ValueError("Start must be less than end")
+
+                    if self.start < 0:
+                        raise ValueError("Start must be greater than 0")
+
+                    if self.end < 0:
+                        raise ValueError("End must be greater than 0")
+
+                    if self.timebase > 1:
+                        raise ValueError("Timebase must be a fraction less than 1")
+
+                def __str__(self) -> str:
+                    parts = []
+                    if self.timebase:
+                        (num, den) = self.timebase.as_integer_ratio()
+                        parts.append(f"TIMEBASE={num}/{den}")
+                    if self.start:
+                        parts.append(f"START={str(self.start)}")
+                    if self.end:
+                        parts.append(f"END={str(self.end)}")
+                    if self.title:
+                        parts.append(f"title={self.title}")
+
+                    ret = "[CHAPTER]\n"
+                    ret += "\n".join(map(lambda x: x.strip(), parts))
+                    return ret.strip()
+
+            metadata = Metadata()
+            keep_characters = (" ", ".", "_", "-")
+
+            def safe_char(c):
+                if c.isalnum() or c in keep_characters:
+                    return c
+                return "_"
+
+            subtitles = [
+                {
+                    "lang": track["label"],
+                    "file_name": (
+                        "".join([safe_char(c) for c in track["label"]]).rstrip()
+                        + ".vtt"
+                    ).replace(r"_+", "_"),
+                    "url": track["file"],
+                }
+                for track in tracks
+                if "captions" == track.get("kind")
+            ]
+
+            cleanup_files = []
+
+            cmd_inputs = [
+                (output_file, cast(bool, True)),
+            ]
+
+            metadata_cmd = []
+            if metadata.has_data():
+                f = tempfile.NamedTemporaryFile(
+                    prefix=f"vidplay_xyz_metadata.{item_id}.",
+                    suffix=".txt",
+                    mode="w+",
+                    encoding="utf-8",
+                )
+                f.write(str(metadata))
+                f.flush()
+                cleanup_files.append(f)
+                cmd_inputs.append((f.name, False))
+                metadata_cmd.extend(
+                    [
+                        "-map_metadata",
+                        len(cmd_inputs) - 1,
+                    ]
+                )
+
+            for sub in subtitles:
+                cmd_inputs.append((sub["url"], True))
+
+            cmd = [
+                "ffmpeg",
+                *list(
+                    chain(
+                        *[["-i", cmd_input] for (cmd_input, _should_map) in cmd_inputs]
+                    )
+                ),
+                *list(
+                    chain(
+                        *[
+                            [
+                                "-map",
+                                str(i),
+                            ]
+                            for (i, (_cmd_input, should_map)) in enumerate(cmd_inputs)
+                            if should_map
+                        ]
+                    )
+                ),
+                *metadata_cmd,
+                "-c",
+                "copy",
+                *list(
+                    chain(
+                        *[
+                            [
+                                f"-metadata:s:s:{i}",
+                                f"language=\"{sub['lang']}\"",
+                            ]
+                            for i, sub in enumerate(subtitles)
+                        ]
+                    )
+                ),
+                os.path.splitext(output_file)[0] + ".mkv",
+            ]
+            cmd = list(map(str, cmd))
+            Console.log_dim("Embedding subtitles...", return_line=True)
+            with subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=1,
+                text=True,
+            ) as proc:
+                res = proc.wait()
+
+                for f in cleanup_files:
+                    f.close()
+
+                if res != 0:
+                    return None
+
+            os.remove(output_file)
+
+        return DownloadInfo(
+            url=source["file"],
+            referer=url,
+            after_dl=after_dl,
+        )
+    except Exception:
+        return None
 
 
 def handle__embedsito_com(url: str) -> HandlerFuncReturn:
@@ -1273,6 +1522,7 @@ def handle__filelions_com(url: str) -> HandlerFuncReturn:
 handlers: Dict[str, Callable[[str], HandlerFuncReturn]] = {
     "rapid-cloud.co": handle__rapid_cloud_co,
     "megacloud.tv": handle__megacloud_tv,
+    "vidplay.xyz": handle__vidplay_xyz,
     "gogoplay1.com": handle__gogoplay1_com,
     "watchsb.com": handle__watchsb_com,
     "fembed-hd.com": handle__fembed_hd_com,
@@ -1307,6 +1557,8 @@ aliases: Dict[str, str] = {
     "streamtape.com": "streamtape.net",
     "streamsss.net": "watchsb.com",
     "fembed9hd.com": "fembed-hd.com",
+    "vid142.site": "vidplay.xyz",
+    "mcloud.bz": "vidplay.xyz",
 }
 
 
