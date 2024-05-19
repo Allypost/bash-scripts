@@ -242,7 +242,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    if not futoken_js:
+    if not futoken_js.ok:
         return None
 
     futoken_js = futoken_js.text
@@ -254,7 +254,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
         return None
     futoken = futoken.replace("\\'", "'")
 
-    item_id_resp = DefaultPlayerDeobfuscator.with_http(scraper).get(
+    item_id_resp = DefaultPlayerDeobfuscator.get(
         f"/vrf/vidplay?vrf_data={encode_url_component(page_url_id)}",
     )
     if not item_id_resp:
@@ -298,7 +298,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
         if len(dict(source).keys()) > 1:
             print("Found multiple formats, using the first one", source)
 
-        tracks = source.get("tracks")
+        tracks = resp_json.get("tracks")
 
         def after_dl(output_file: str, download_info: DownloadInfo):
             Console.log_dim("Donwnload done. Embedding metadata...", return_line=True)
