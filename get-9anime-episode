@@ -1,0 +1,610 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import multiprocessing
+import re
+import subprocess
+from dataclasses import dataclass
+from itertools import chain
+from typing import Callable, Self, Tuple, TypeVar, Union, cast
+
+import cloudscraper
+from bs4 import BeautifulSoup, Tag
+from bs4.element import ResultSet
+from urllib.parse import quote_plus as encode_url_component, urlparse
+
+from python.downloaders import get_download_info, sort_download_links
+from python.helpers.deobfuscator import DefaultPlayerDeobfuscator
+from python.helpers.list import flatten
+from python.helpers.main import get_episode_number_to_download, parse_arguments
+from python.helpers.size import human_byte_size
+from python.log.console import Chalk, Console
+
+BASE_URL = "https://anix.to"
+
+ALLOWED_SERIES_TYPES = {
+    "softsub",
+    "sub",
+    "dub",
+}
+
+FORBIDDEN_CDN_URLS = {"ed.netmagcdn.com"}
+
+
+def get_9anime_page_url(anime_name: str) -> str:
+    return f"{BASE_URL}/anime/{anime_name}"
+
+
+def get_anime_id(anime_name: str) -> str | None:
+    Console.log_dim("Extracting id from name", return_line=True)
+    name_parts = anime_name.split("-")
+    anime_id = name_parts[-1]
+    if anime_id.isdigit():
+        return anime_id
+    Console.log_dim("Fetching episode page...", return_line=True)
+    response = cloudscraper.create_scraper().get(
+        get_9anime_page_url(anime_name),
+    )
+
+    if not response.status_code:
+        Console.log_dim("Anime not found")
+        return None
+
+    page_html = response.text
+
+    Console.log_dim("Parsing HTML...", return_line=True)
+
+    try:
+        info = BeautifulSoup(
+            page_html,
+            "html.parser",
+        ).select_one("div[data-id]")
+
+        if not info:
+            return None
+
+        return info.attrs["data-id"]
+    except Exception:
+        return None
+
+
+@dataclass
+class EpisodeInfo:
+    number: float
+    slug: str
+    has_sub: bool
+    has_dub: bool
+    ids: str
+
+
+def get_page(url: str):
+    return cloudscraper.create_scraper().get(
+        url,
+        headers={
+            "Accept": "*/*",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+
+
+def get_site_api_with_vrf(url_base: str, last_segment: str):
+    vrf_token = get_encoded_vrf_token(last_segment)
+    if not vrf_token:
+        return None
+    return get_page(
+        f"{BASE_URL.rstrip("/")}/{url_base.strip("/")}/{last_segment}?vrf={vrf_token}"
+    )
+
+
+def get_encoded_vrf_token(data: str) -> str | None:
+    vrf_resp = DefaultPlayerDeobfuscator.get(
+        f"/vrf/9anime?vrf_data={encode_url_component(data)}",
+        validate_status=False,
+    )
+
+    if vrf_resp is None:
+        return None
+
+    if "message" in vrf_resp:
+        Console.log_dim(f"Failed to get decoded data: {vrf_resp['message']}")
+        return None
+
+    try:
+        token = str(vrf_resp["vrf"])
+        return encode_url_component(token)
+    except Exception:
+        Console.log_dim("Failed to get VRF token")
+        return None
+
+
+def get_decoded_vrf_data(data: str) -> str | None:
+    vrf_resp = DefaultPlayerDeobfuscator.get(
+        f"/vrf/9anime?devrf_data={encode_url_component(data)}",
+        validate_status=False,
+    )
+
+    if vrf_resp is None:
+        return None
+
+    if "message" in vrf_resp:
+        Console.log_dim(f"Failed to get decoded data: {vrf_resp['message']}")
+        return None
+
+    return str(vrf_resp["data"])
+
+
+def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
+    Console.log_dim("Fetching episode list...", return_line=True)
+    response = get_site_api_with_vrf(
+        "/ajax/episode/list/",
+        anime_id,
+    )
+
+    if not response:
+        Console.log_dim("No episodes found")
+        return {}
+
+    page_json = response.json()
+
+    elements: ResultSet[Tag] = BeautifulSoup(
+        page_json["result"],
+        "html.parser",
+    ).find_all("a")
+
+    if not elements:
+        Console.log_dim("No info found")
+        return {}
+
+    return {
+        float(element.attrs["data-num"]): EpisodeInfo(
+            number=float(element.attrs["data-num"]),
+            slug=element.attrs["data-slug"],
+            has_sub=element.attrs["data-sub"] == "1",
+            has_dub=element.attrs["data-dub"] == "1",
+            ids=str(element.attrs["data-ids"]),
+        )
+        for element in elements
+        if "data-num" in element.attrs and str(element.attrs["data-num"]).isdigit()
+    }
+
+
+@dataclass
+class DownloadServerInfo:
+    type: str
+    episode_id: str
+    link_id: str
+    server_id: str
+    name: str
+
+
+@dataclass
+class EpisodeSkipData:
+    intro: Tuple[int, int] | None
+    outro: Tuple[int, int] | None
+
+    @classmethod
+    def from_str(cls, skip_data: str | None) -> Self | None:
+        if not skip_data:
+            return None
+
+        try:
+            parsed = json.loads(skip_data)
+        except json.decoder.JSONDecodeError:
+            return None
+
+        ret = cls(intro=None, outro=None)
+
+        try:
+            ret.intro = (parsed["intro"][0], parsed["intro"][1])
+        except KeyError:
+            pass
+
+        try:
+            ret.outro = (parsed["outro"][0], parsed["outro"][1])
+        except KeyError:
+            pass
+
+        return ret
+
+
+@dataclass
+class DownloadInfo:
+    name: str
+    type: str
+    url: str
+    skip_data: EpisodeSkipData | None
+
+    def as_dict(self) -> dict:
+        return self.__dict__
+
+
+def get_download_url_from_server_info(
+    server: DownloadServerInfo,
+) -> DownloadInfo | None:
+    response = get_site_api_with_vrf("/ajax/server/", server.link_id)
+
+    if not response:
+        return None
+
+    page_json = response.json()
+
+    try:
+        encoded_url = page_json["result"]["url"]
+        encoded_skip_data = (
+            page_json["result"]["skip_data"]
+            if "skip_data" in page_json["result"]
+            else None
+        )
+    except Exception:
+        return None
+
+    decoded_url = get_decoded_vrf_data(encoded_url)
+    decoded_skip_data = (
+        get_decoded_vrf_data(encoded_skip_data) if encoded_skip_data else None
+    )
+
+    if not decoded_url:
+        return None
+
+    return DownloadInfo(
+        name=server.name,
+        type=server.type,
+        url=decoded_url,
+        skip_data=EpisodeSkipData.from_str(decoded_skip_data),
+    )
+
+
+def get_anime_episode_download_server_list(
+    episode: EpisodeInfo,
+    series_type: Union[str, set[str]] = "sub",
+) -> list[DownloadInfo] | None:
+    if isinstance(series_type, str):
+        series_type = {series_type}
+
+    Console.log_dim("Fetching download servers...", return_line=True)
+
+    vrf_token = get_encoded_vrf_token(episode.ids)
+    if not vrf_token:
+        return None
+
+    response = get_site_api_with_vrf(
+        "/ajax/server/list/",
+        episode.ids,
+    )
+
+    if not response:
+        Console.log_dim("No download servers found")
+        return None
+
+    page_json = response.json()
+
+    type_groups: ResultSet[Tag] = BeautifulSoup(
+        page_json["result"],
+        "html.parser",
+    ).find_all(
+        class_="ani-server-type",
+    )
+
+    element_groups = (
+        (
+            str(e.attrs["data-type"]),
+            cast(
+                ResultSet[Tag],
+                e.find_all(
+                    class_="server",
+                ),
+            ),
+        )
+        for e in type_groups
+    )
+
+    servers_infos = [
+        DownloadServerInfo(
+            episode_id=element.attrs["data-ep-id"],
+            name=next(element.stripped_strings),
+            server_id=element.attrs["data-sv-id"],
+            link_id=element.attrs["data-link-id"],
+            type=ep_type,
+        )
+        for (ep_type, elements) in element_groups
+        for element in elements
+        if ep_type in series_type
+    ]
+    servers_infos = list(sorted(servers_infos, key=lambda x: x.type))
+
+    Console.log_dim("Fetching list of source pages...", return_line=True)
+
+    with multiprocessing.Pool() as pool:
+        results = [
+            item
+            for item in pool.imap_unordered(
+                get_download_url_from_server_info,
+                servers_infos,
+            )
+            if item and item.type in series_type
+        ]
+
+    return results
+
+
+def main():
+    def with_additional_args(parser: argparse.ArgumentParser):
+        parser.add_argument(
+            "-t --type",
+            help="Whether to download the sub or dub",
+            type=str,
+            nargs="?",
+            dest="series_type",
+        )
+
+        parser.add_argument(
+            "-o, --offset",
+            help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
+            type=int,
+            nargs="?",
+            required=False,
+            default=0,
+            dest="offset",
+        )
+
+        parser.add_argument(
+            "--dump-download-sites",
+            help="Dump the list of download sites and exit",
+            required=False,
+            dest="dump_download_sites",
+            action="store_true",
+        )
+
+    argv = parse_arguments(site_name="9anime", extend=with_additional_args)
+
+    series_name = argv.series_name or argv.series
+    number_format = argv.number_format
+    series_type = argv.series_type
+
+    if series_name is None:
+        raise Exception("No series name")
+
+    if series_type not in ALLOWED_SERIES_TYPES:
+        raise Exception(
+            f"Invalid series type (must be one of: {', '.join(ALLOWED_SERIES_TYPES)})"
+        )
+
+    episode_number_offset = argv.offset
+    episode_number = get_episode_number_to_download(argv) - episode_number_offset
+
+    offset_str = (
+        f" (offset episode {episode_number + episode_number_offset})"
+        if episode_number_offset
+        else ""
+    )
+
+    Console.log(
+        f"Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(str(episode_number) + offset_str, Chalk.black, Chalk.bg_blue_bright)}"
+    )
+
+    anime_id = get_anime_id(series_name)
+    if anime_id is None:
+        Console.log_error(f"Can't fetch page for `{series_name}'")
+        exit(1)
+
+    episodes = get_anime_episode_list(anime_id)
+    if episode_number not in episodes:
+        Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
+        exit(1)
+
+    if series_type == "sub":
+        series_type = {"sub", "softsub"}
+    download_sites = get_anime_episode_download_server_list(
+        episodes[episode_number],
+        series_type,
+    )
+
+    if not download_sites:
+        Console.log_error(f"Couldn't download {episode_number}")
+        exit(1)
+
+    sorted_download_site_urls = sort_download_links(
+        download_sites,
+        to_url=lambda x: x.url,
+    )
+    sorted_download_site_urls = list(
+        sorted(
+            sorted_download_site_urls, key=lambda x: -1 if x.type == "softsub" else 0
+        )
+    )
+
+    if argv.dump_download_sites:
+        Console.clear_line()
+        Console.log(
+            json.dumps(
+                sorted_download_site_urls, default=lambda o: o.__dict__, indent=2
+            )
+        )
+        Console.log(json.dumps(download_sites, default=lambda o: o.__dict__, indent=2))
+        exit(0)
+
+    download_sites = {
+        f"{item.name} {item.type}": item.url for item in sorted_download_site_urls
+    }
+
+    Console.log_dim("Trying to find download link...", return_line=True)
+
+    processed = 0
+    for site in download_sites:
+        processed += 1
+        download_url = download_sites[site]
+        try:
+            download_info = get_download_info(
+                download_url, get_9anime_page_url(anime_name=series_name)
+            )
+            if download_info is None:
+                raise Exception("No handler")
+
+            url = download_info.url
+            referer = download_info.referer or url
+            output_file = (
+                f"{number_format % (episode_number + episode_number_offset)}.mp4"
+            )
+
+            parsed_url = urlparse(url)
+
+            if parsed_url.hostname in FORBIDDEN_CDN_URLS:
+                Console.log(
+                    f"{Chalk.colour(Chalk.italic)}Skipping {site}: {url}{Chalk.colour('23m')}"
+                )
+                # continue
+
+            Console.log(
+                f"{Chalk.colour(Chalk.italic)}Downloading from {site}: {url}{Chalk.colour('23m')}"
+            )
+
+            Console.log_dim("Starting download...", return_line=True)
+            download_cmd = [
+                "yt-dlp",
+                "--no-warnings",
+                "--no-check-certificate",
+                "--concurrent-fragments",
+                "16",
+                "--abort-on-unavailable-fragments",
+                "--retries",
+                "infinite",
+                "--downloader",
+                "ffmpeg",
+                "--downloader-args",
+                "-progress - -nostats",
+                "--referer",
+                referer,
+                *list(
+                    chain(
+                        *[["--add-header", header] for header in download_info.headers]
+                    )
+                ),
+                "--output",
+                output_file,
+                url,
+            ]
+            download_line_native = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
+
+            with subprocess.Popen(
+                download_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=1,
+                text=True,
+            ) as proc:
+                Console.log_dim("Waiting for download progress...", return_line=True)
+                for line in proc.stdout or []:
+                    # if download_line_native.search(line):
+                    #     status = line.split(" ", maxsplit=1)[1].strip()
+                    #     Console.log_dim(status, return_line=True)
+                    #     continue
+
+                    # Read lines until status stuff comes along
+                    if line[0] == "[":
+                        continue
+                    break
+
+                # Read status block
+                def s(key, pad=0, *, default="???") -> str:
+                    return output_status_info.get(key, default).rjust(pad, " ")
+
+                def s_if(key, pad=0, *, default="???"):
+                    if key in output_status_info:
+                        return s(key=key, pad=pad, default=default)
+                    return None
+
+                T = TypeVar("T")
+
+                def chain_if(
+                    initial: T | None, *processors: Callable[[T], T]
+                ) -> T | None:
+                    fns = flatten(processors)
+                    for fn in fns:
+                        if initial is None:
+                            break
+                        initial = fn(initial)
+                    return initial
+
+                def format_output():
+                    out = []
+                    for item in output_layout:
+                        match item:
+                            case dict():
+                                for name, value in item.items():
+                                    match value:
+                                        case gen if callable(gen):
+                                            res = gen()
+                                            if res is not None:
+                                                out.append(f"{name}={res}")
+                                        case None:
+                                            out.append(f"{name}")
+                                        case value:
+                                            out.append(f"{name}={value}")
+                            case gen if callable(gen):
+                                res = gen()
+                                if res is not None:
+                                    out.append(res)
+                            case value:
+                                out.append(str(value))
+                    return " ".join(out)
+
+                output_status_info = {}
+                output_layout = [
+                    {"time": lambda: s_if("out_time")},
+                    "|",
+                    {
+                        "fps": lambda: s_if("fps", 6),
+                        "speed": lambda: s_if("speed", 5),
+                        "bitrate": lambda: s_if("bitrate", 6),
+                    },
+                    "|",
+                    {
+                        "size": lambda: chain_if(
+                            s_if("total_size"),
+                            lambda x: str(x).strip(),
+                            lambda x: human_byte_size(x),
+                        )
+                    },
+                ]
+                while proc.poll() is None:
+                    try:
+                        for line in proc.stdout or []:
+                            if line.startswith("progress="):
+                                break
+                            key, value = line.strip().split("=", maxsplit=1)
+                            output_status_info[key.strip()] = value.strip()
+                        Console.log_dim(
+                            format_output(),
+                            return_line=True,
+                        )
+                    except Exception:
+                        pass
+
+                if proc.wait() != 0:
+                    print(subprocess.list2cmdline(download_cmd))
+                    raise Exception("Something broke")
+
+            download_info.after_dl(output_file, download_info)
+        except Exception as e:
+            if str(e) == "No handler":
+                continue
+
+            print(("\n" + "=" * 32) * 2)
+            print(e)
+            print(("=" * 32 + "\n") * 2)
+
+        for _ in range(processed):
+            Console.clear_line()
+            Console.move_up(1)
+        Console.log_success(f"Episode {episode_number} downloaded")
+        exit()
+
+    Console.clear_line()
+    Console.move_up(processed)
+    Console.log_error(f"Failed to download episode {episode_number}")
+    exit(1)
+
+
+if __name__ == "__main__":
+    main()
