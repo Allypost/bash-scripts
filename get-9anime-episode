@@ -264,10 +264,6 @@ def get_anime_episode_download_server_list(
 
     Console.log_dim("Fetching download servers...", return_line=True)
 
-    vrf_token = get_encoded_vrf_token(episode.ids)
-    if not vrf_token:
-        return None
-
     response = get_site_api_with_vrf(
         "/ajax/server/list/",
         episode.ids,
