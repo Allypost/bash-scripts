@@ -58,7 +58,7 @@ def get_episode_number_to_download(argv) -> float:
         return argv.episode
 
     last_episode_number = os.popen(
-        "ls | sort -h | grep -E '^[0-9]+' | grep -Ev '\\.part$' | tail -n1 | cut -d'.' -f1"
+        "ls | sort -h | grep -E '^[0-9]+\\.' | grep -Ev '\\.part$' | tail -n1 | cut -d'.' -f1"
     ).read()
 
     return float(last_episode_number or 0) + 1
