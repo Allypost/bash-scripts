@@ -263,12 +263,12 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
     Console.log_dim("Got decrypted response. Fetching sources...", return_line=True)
 
     try:
-        item_id = item_id_resp["vrf"]
+        item_id_vrf = item_id_resp["vrf"]
     except Exception:
         return None
 
     encoded_data: list[str] = [futoken]
-    for i, c in enumerate(item_id):
+    for i, c in enumerate(item_id_vrf):
         encoded_data.append(str(ord(futoken[i % len(futoken)]) + ord(c)))
 
     resp = scraper.get(
@@ -285,6 +285,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
         return None
 
     try:
+        resp_json = resp.json()
         resp_json = resp.json()["result"]
         sources = list(resp_json["sources"])
 
@@ -392,7 +393,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
             metadata_cmd = []
             if metadata.has_data():
                 f = tempfile.NamedTemporaryFile(
-                    prefix=f"vidplay_xyz_metadata.{item_id}.",
+                    prefix=f"vidplay_xyz_metadata.{item_id_vrf}.",
                     suffix=".txt",
                     mode="w+",
                     encoding="utf-8",
