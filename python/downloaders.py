@@ -286,7 +286,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
 
     try:
         resp_json = resp.json()
-        resp_json = resp.json()["result"]
+        resp_json = resp_json["result"]
         sources = list(resp_json["sources"])
 
         if len(sources) > 1:
@@ -1616,6 +1616,9 @@ aliases: Dict[str, str] = {
     "vid142.site": "vidplay.xyz",
     "mcloud.bz": "vidplay.xyz",
     "kerapoxy.cc": "filemoon.com",
+    "vid2a41.site": "vidplay.xyz",
+    "megaf.cc": "vidplay.xyz",
+    "1azayf9w.xyz": "filemoon.sx",
 }
 
 
@@ -1627,7 +1630,7 @@ def get_download_info(
 
     if domain in aliases:
         domain = aliases[domain]
-        parsed = parsed._replace(netloc=domain)
+        # parsed = parsed._replace(netloc=domain)
 
     if domain not in handlers:
         return None
