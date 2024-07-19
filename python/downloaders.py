@@ -287,8 +287,11 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
         resp_json = resp.json()
         resp_json_vrf = resp_json["result"]
 
-        resp_json_resp = DefaultPlayerDeobfuscator.get(
-            f"/vrf/vidplay/devrf?vrf={encode_url_component(resp_json_vrf)}",
+        resp_json_resp = DefaultPlayerDeobfuscator.post(
+            "/vrf/vidplay/devrf",
+            json={
+                "vrf": resp_json_vrf,
+            },
         )
 
         if not resp_json_resp:
