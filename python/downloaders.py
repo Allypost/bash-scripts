@@ -263,18 +263,17 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
     Console.log_dim("Got decrypted response. Fetching sources...", return_line=True)
 
     try:
-        item_id_vrf = item_id_resp["vrf"]
+        item_id_vrf_url = item_id_resp["vrf_url"]
+        item_id_vrf_h = item_id_resp["vrf_h"]
     except Exception:
         return None
 
-    encoded_data: list[str] = [futoken]
-    for i, c in enumerate(item_id_vrf):
-        encoded_data.append(str(ord(futoken[i % len(futoken)]) + ord(c)))
-
     resp = scraper.get(
-        f"{base_url}/mediainfo/{",".join(encoded_data)}?{parsed_url.query}",
+        f"{base_url}/mediainfo/{item_id_vrf_url}?{parsed_url.query}&h={item_id_vrf_h}",
         headers={
-            "Accept": "text/javascript, */*; q=0.01",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Cache-Control": "no-cache",
             "Referer": url,
             "X-Requested-With": "XMLHttpRequest",
         },
@@ -286,7 +285,18 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
 
     try:
         resp_json = resp.json()
-        resp_json = resp_json["result"]
+        resp_json_vrf = resp_json["result"]
+
+        resp_json_resp = DefaultPlayerDeobfuscator.get(
+            f"/vrf/vidplay/devrf?vrf={encode_url_component(resp_json_vrf)}",
+        )
+
+        if not resp_json_resp:
+            return None
+
+        resp_json = resp_json_resp["vrf_data"]
+        resp_json = json.loads(resp_json)
+
         sources = list(resp_json["sources"])
 
         if len(sources) > 1:
@@ -393,7 +403,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
             metadata_cmd = []
             if metadata.has_data():
                 f = tempfile.NamedTemporaryFile(
-                    prefix=f"vidplay_xyz_metadata.{item_id_vrf}.",
+                    prefix=f"vidplay_xyz_metadata.{item_id_vrf_h}__{item_id_vrf_url}.",
                     suffix=".txt",
                     mode="w+",
                     encoding="utf-8",
