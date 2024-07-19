@@ -582,8 +582,11 @@ def main():
                     raise Exception("Something broke")
 
             download_info.after_dl(output_file, download_info)
+        except KeyboardInterrupt:
+            continue
         except Exception as e:
             if str(e) == "No handler":
+                Console.log_dim(f"No handler for {download_url} on {site}")
                 continue
 
             print(("\n" + "=" * 32) * 2)
