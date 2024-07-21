@@ -168,11 +168,8 @@ def get_download_url_from_server_info(
 
 def get_anime_episode_download_server_list(
     episode: EpisodeInfo,
-    series_type: Union[str, set[str]] = "sub",
+    series_types: list[str] | set[str],
 ) -> list[DownloadInfo] | None:
-    if isinstance(series_type, str):
-        series_type = {series_type}
-
     Console.log_dim("Fetching download servers...", return_line=True)
     response = get_page(
         f"{BASE_URL}/ajax/v2/episode/servers?episodeId={episode.id}",
@@ -210,7 +207,7 @@ def get_anime_episode_download_server_list(
                 get_download_url_from_server_info,
                 servers_infos.values(),
             )
-            if item and item.type in series_type
+            if item and item.type in series_types
         ]
 
     return results
@@ -226,10 +223,11 @@ def main():
     def with_additional_args(parser: argparse.ArgumentParser):
         parser.add_argument(
             "-t --type",
+            action="append",
             help="Whether to download the sub or dub",
             type=str,
             nargs="?",
-            dest="series_type",
+            dest="series_types",
         )
 
         parser.add_argument(
@@ -246,15 +244,15 @@ def main():
 
     series_name = argv.series_name or argv.series
     number_format = argv.number_format
-    series_type = argv.series_type
+    series_types_raw = flatten([str(x).split(",") for x in list(argv.series_types)])
+    series_types_raw = [str(x).strip() for x in series_types_raw]
+    series_types = [x for x in series_types_raw if x in ALLOWED_SERIES_TYPES]
 
     if series_name is None:
         raise Exception("No series name")
 
-    if series_type not in ALLOWED_SERIES_TYPES:
-        raise Exception(
-            f"Invalid series type (must be one of: {', '.join(ALLOWED_SERIES_TYPES)})"
-        )
+    if not series_types:
+        raise Exception(f"No known series type provided. Got: {", ".join(series_types_raw)}. Allowed: {", ".join(ALLOWED_SERIES_TYPES)}")
 
     episode_number_offset = argv.offset
     episode_number = get_episode_number_to_download(argv) - episode_number_offset
@@ -279,10 +277,8 @@ def main():
         Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
         exit(1)
 
-    if series_type == "sub":
-        series_type = {"sub", "raw"}
     download_sites = get_anime_episode_download_server_list(
-        episodes[episode_number], series_type
+        episodes[episode_number], series_types
     )
 
     if not download_sites:
@@ -294,6 +290,10 @@ def main():
     sorted_download_site_urls = sort_download_links(
         download_sites,
         to_url=lambda x: x.url,
+    )
+    series_types_order = {t: i for i, t in enumerate(series_types)}
+    sorted_download_site_urls = list(
+        sorted(sorted_download_site_urls, key=lambda x: series_types_order.get(x.type, 9999))
     )
 
     download_sites = {item.name: item.url for item in sorted_download_site_urls}
