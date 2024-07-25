@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
 
 import argparse
-import atexit
-from collections.abc import Callable
 import json
 import multiprocessing
-import re
-import signal
-import subprocess
-import sys
-import urllib.parse
 from dataclasses import dataclass
-from itertools import chain
-from typing import TypeVar, Union
 
 import cloudscraper
 from bs4 import BeautifulSoup
 from bs4.element import ResultSet
 
-from python.downloaders import get_download_info, sort_download_links
-from python.helpers.list import flatten
-from python.helpers.main import get_episode_number_to_download, parse_arguments
-from python.helpers.size import human_byte_size
-from python.log.console import Chalk, Console
+from python.helpers.main import (
+    DownloadSite,
+    DownloadSitesCtx,
+    EpisodeNumberNotFoundException,
+    downloader_main,
+)
+from python.log.console import Console
 
 BASE_URL = "https://hianime.to"
 
@@ -140,16 +133,9 @@ class DownloadServerInfo:
     name: str
 
 
-@dataclass
-class DownloadInfo:
-    name: str
-    type: str
-    url: str
-
-
 def get_download_url_from_server_info(
     server: DownloadServerInfo,
-) -> DownloadInfo | None:
+) -> DownloadSite | None:
     response = get_page(
         f"{BASE_URL}/ajax/v2/episode/sources?id={server.id}",
     )
@@ -159,7 +145,7 @@ def get_download_url_from_server_info(
 
     page_json = response.json()
 
-    return DownloadInfo(
+    return DownloadSite(
         name=server.name,
         type=server.type,
         url=page_json["link"],
@@ -169,7 +155,7 @@ def get_download_url_from_server_info(
 def get_anime_episode_download_server_list(
     episode: EpisodeInfo,
     series_types: list[str] | set[str],
-) -> list[DownloadInfo] | None:
+) -> list[DownloadSite] | None:
     Console.log_dim("Fetching download servers...", return_line=True)
     response = get_page(
         f"{BASE_URL}/ajax/v2/episode/servers?episodeId={episode.id}",
@@ -214,22 +200,7 @@ def get_anime_episode_download_server_list(
 
 
 def main():
-    Console.hide_cursor()
-    atexit.register(Console.show_cursor)
-    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    signal.signal(signal.SIGHUP, lambda *_: sys.exit(0))
-
     def with_additional_args(parser: argparse.ArgumentParser):
-        parser.add_argument(
-            "-t --type",
-            action="append",
-            help="Whether to download the sub or dub",
-            type=str,
-            nargs="?",
-            dest="series_types",
-        )
-
         parser.add_argument(
             "-o, --offset",
             help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
@@ -240,245 +211,28 @@ def main():
             dest="offset",
         )
 
-    argv = parse_arguments(site_name="zoro.to", extend=with_additional_args)
+    def get_download_sites(ctx: DownloadSitesCtx):
+        anime_id = get_anime_id(ctx.series_name)
+        if anime_id is None:
+            Console.log_error(f"Can't fetch page for `{ctx.series_name}'")
+            exit(1)
 
-    series_name = argv.series_name or argv.series
-    number_format = argv.number_format
-    series_types_raw = flatten([str(x).split(",") for x in list(argv.series_types)])
-    series_types_raw = [str(x).strip() for x in series_types_raw]
-    series_types = [x for x in series_types_raw if x in ALLOWED_SERIES_TYPES]
+        episodes = get_anime_episode_list(anime_id)
+        if ctx.episode_number not in episodes:
+            raise EpisodeNumberNotFoundException()
 
-    if series_name is None:
-        raise Exception("No series name")
-
-    if not series_types:
-        raise Exception(f"No known series type provided. Got: {", ".join(series_types_raw)}. Allowed: {", ".join(ALLOWED_SERIES_TYPES)}")
-
-    episode_number_offset = argv.offset
-    episode_number = get_episode_number_to_download(argv) - episode_number_offset
-
-    offset_str = (
-        f" (offset episode {episode_number + episode_number_offset})"
-        if episode_number_offset
-        else ""
-    )
-
-    Console.log(
-        f"Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(str(episode_number) + offset_str, Chalk.black, Chalk.bg_blue_bright)}"
-    )
-
-    anime_id = get_anime_id(series_name)
-    if anime_id is None:
-        Console.log_error(f"Can't fetch page for `{series_name}'")
-        exit(1)
-
-    episodes = get_anime_episode_list(anime_id)
-    if episode_number not in episodes:
-        Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
-        exit(1)
-
-    download_sites = get_anime_episode_download_server_list(
-        episodes[episode_number], series_types
-    )
-
-    if not download_sites:
-        Console.log_error(
-            f"Couldn't download {episode_number}: No download servers found"
+        return get_anime_episode_download_server_list(
+            episodes[ctx.episode_number],
+            ctx.series_types,
         )
-        exit(1)
 
-    sorted_download_site_urls = sort_download_links(
-        download_sites,
-        to_url=lambda x: x.url,
+    downloader_main(
+        site_name="zoro.to",
+        with_additional_args=with_additional_args,
+        allowed_series_types=ALLOWED_SERIES_TYPES,
+        episode_page_url_fn=get_zoroto_page_url,
+        download_sites_fn=get_download_sites,
     )
-    series_types_order = {t: i for i, t in enumerate(series_types)}
-    sorted_download_site_urls = list(
-        sorted(sorted_download_site_urls, key=lambda x: series_types_order.get(x.type, 9999))
-    )
-
-    download_sites = {item.name: item.url for item in sorted_download_site_urls}
-
-    Console.log_dim("Trying to find download link...", return_line=True)
-
-    processed = 0
-    for site in download_sites:
-        processed += 1
-        download_url = download_sites[site]
-        try:
-            download_info = get_download_info(
-                download_url, get_zoroto_page_url(anime_name=series_name)
-            )
-            if download_info is None:
-                raise Exception("No handler")
-
-            url = download_info.url
-            referer = download_info.referer or url
-            output_file = (
-                f"{number_format % (episode_number + episode_number_offset)}.mp4"
-            )
-
-            parsed_url = urllib.parse.urlparse(url)
-
-            if parsed_url.hostname in FORBIDDEN_CDN_URLS:
-                Console.log(
-                    f"{Chalk.colour(Chalk.italic)}Skipping {site}: {url}{Chalk.colour('23m')}"
-                )
-                # continue
-
-            Console.log(
-                f"{Chalk.colour(Chalk.italic)}Downloading from {site}: {url}{Chalk.colour('23m')}"
-            )
-
-            Console.log_dim("Starting download...", return_line=True)
-            download_cmd = [
-                "yt-dlp",
-                "--no-warnings",
-                "--no-check-certificate",
-                "--concurrent-fragments",
-                "16",
-                "--abort-on-unavailable-fragments",
-                "--retries",
-                "infinite",
-                "--downloader",
-                "ffmpeg",
-                "--downloader-args",
-                "-progress - -nostats",
-                "--referer",
-                referer,
-                *list(
-                    chain(
-                        *[["--add-header", header] for header in download_info.headers]
-                    )
-                ),
-                "--output",
-                output_file,
-                url,
-            ]
-            download_line_native = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
-
-            with subprocess.Popen(
-                download_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                bufsize=1,
-                text=True,
-            ) as proc:
-                Console.log_dim("Waiting for download progress...", return_line=True)
-                for line in proc.stdout or []:
-                    # if download_line_native.search(line):
-                    #     status = line.split(" ", maxsplit=1)[1].strip()
-                    #     Console.log_dim(status, return_line=True)
-                    #     continue
-
-                    # Read lines until status stuff comes along
-                    if line[0] == "[":
-                        continue
-                    break
-
-                # Read status block
-                def s(key, pad=0, *, default="???") -> str:
-                    return output_status_info.get(key, default).rjust(pad, " ")
-
-                def s_if(key, pad=0, *, default="???"):
-                    if key in output_status_info:
-                        return s(key=key, pad=pad, default=default)
-                    return None
-
-                T = TypeVar("T")
-
-                def chain_if(
-                    initial: T | None, *processors: Callable[[T], T]
-                ) -> T | None:
-                    fns = flatten(processors)
-                    for fn in fns:
-                        if initial is None:
-                            break
-                        initial = fn(initial)
-                    return initial
-
-                def format_output():
-                    out = []
-                    for item in output_layout:
-                        match item:
-                            case dict():
-                                for name, value in item.items():
-                                    match value:
-                                        case gen if callable(gen):
-                                            res = gen()
-                                            if res is not None:
-                                                out.append(f"{name}={res}")
-                                        case None:
-                                            out.append(f"{name}")
-                                        case value:
-                                            out.append(f"{name}={value}")
-                            case gen if callable(gen):
-                                res = gen()
-                                if res is not None:
-                                    out.append(res)
-                            case value:
-                                out.append(str(value))
-                    return " ".join(out)
-
-                output_status_info = {}
-                output_layout = [
-                    {"time": lambda: s_if("out_time")},
-                    "|",
-                    {
-                        "fps": lambda: s_if("fps", 6),
-                        "speed": lambda: s_if("speed", 5),
-                        "bitrate": lambda: s_if("bitrate", 6),
-                    },
-                    "|",
-                    {
-                        "size": lambda: chain_if(
-                            s_if("total_size"),
-                            lambda x: str(x).strip(),
-                            lambda x: human_byte_size(x),
-                        )
-                    },
-                ]
-                while proc.poll() is None:
-                    try:
-                        for line in proc.stdout or []:
-                            if line.startswith("progress="):
-                                break
-                            key, value = line.strip().split("=", maxsplit=1)
-                            output_status_info[key.strip()] = value.strip()
-                        Console.log_dim(
-                            format_output(),
-                            return_line=True,
-                        )
-                    except Exception:
-                        pass
-
-                if proc.wait() != 0:
-                    print(subprocess.list2cmdline(download_cmd))
-                    raise Exception("Something broke")
-
-            download_info.after_dl(output_file, download_info)
-        except KeyboardInterrupt:
-            continue
-        except Exception as e:
-            if str(e) == "No handler":
-                Console.log_dim(f"No handler for {download_url} on {site}")
-                continue
-
-            print(("\n" + "=" * 32) * 2)
-            print(e)
-            print(("=" * 32 + "\n") * 2)
-
-        for _ in range(processed):
-            Console.clear_line()
-            Console.move_up(1)
-        Console.log_success(f"Episode {episode_number} downloaded")
-        exit()
-
-    Console.clear_line()
-    Console.move_up(processed)
-    Console.log_error(
-        f"Failed to download episode {episode_number}: No handlers succeeded"
-    )
-    exit(1)
 
 
 if __name__ == "__main__":
