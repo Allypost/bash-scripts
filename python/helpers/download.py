@@ -1,6 +1,8 @@
 import os
 import traceback
 from dataclasses import dataclass, field
+import datetime
+from enum import StrEnum, auto
 from itertools import chain
 import re
 import subprocess
@@ -93,6 +95,10 @@ def download_by_sites(
                         continue
                     break
 
+                time_last_size_change = datetime.datetime.now()
+                prev_size: str | None = None
+                time_last_speed_gt_1 = datetime.datetime.now()
+                prev_speed: str | None = None
                 download_progress = DownloadProgressInfo()
                 while proc.poll() is None:
                     try:
@@ -102,13 +108,47 @@ def download_by_sites(
                                 break
                             key, value = line.strip().split("=", maxsplit=1)
                             download_progress.set(key, value)
-
-                        Console.log_dim(
-                            str(download_progress),
-                            return_line=True,
-                        )
                     except Exception:
                         pass
+
+                    cur_speed = download_progress.get("speed", None)
+                    cur_size = download_progress.get("total_size", None)
+
+                    if cur_size != prev_size:
+                        time_last_size_change = datetime.datetime.now()
+
+                    if cur_speed is not None and float(cur_speed[:-1]) > 1:
+                        time_last_speed_gt_1 = datetime.datetime.now()
+
+                    size_same_for_s = (
+                        datetime.datetime.now() - time_last_size_change
+                    ).total_seconds()
+
+                    if prev_size is not None and cur_size == prev_size:
+                        is_processing = prev_speed == cur_speed
+                        if not is_processing and size_same_for_s >= 30:
+                            proc.kill()
+                            raise DownloadStalledException("Stalled for too long")
+
+                    if (
+                        prev_speed is not None
+                        and cur_speed is not None
+                        and float(cur_speed[:-1]) < 1
+                    ):
+                        time_speed_lt_1 = (
+                            datetime.datetime.now() - time_last_speed_gt_1
+                        ).total_seconds()
+                        if time_speed_lt_1 >= 60:
+                            proc.kill()
+                            raise DownloadStalledException("Speed too low")
+
+                    prev_size = cur_size
+                    prev_speed = cur_speed
+
+                    Console.log_dim(
+                        str(download_progress),
+                        return_line=True,
+                    )
 
                 ecode = proc.wait()
                 if ecode != 0:
@@ -130,12 +170,16 @@ def download_by_sites(
         except KeyboardInterrupt:
             continue
         except Exception as e:
-            if str(e) == "No handler":
+            if isinstance(e, NoHandlerException):
                 Console.log_dim(f"No handler for {download_url} on {site}")
                 continue
 
+            if isinstance(e, DownloadRecoverableException):
+                Console.log_dim(f"Got recoverable error: {e}, skipping source")
+                continue
+
             print(("\n" + "=" * 32) * 2)
-            print(e)
+            print(e, traceback.format_exc())
             print(("=" * 32 + "\n") * 2)
 
         for _ in range(processed):
@@ -224,3 +268,25 @@ class DownloadProgressInfo:
 
     def __str__(self) -> str:
         return self.to_str()
+
+
+class DownloadRecoverableException(Exception):
+    pass
+
+
+class ConnectionAbortedException(DownloadRecoverableException):
+    pass
+
+
+class NoHandlerException(DownloadRecoverableException):
+    pass
+
+
+class DownloadStalledException(DownloadRecoverableException):
+    pass
+
+
+class DownloadByInfoEvent(StrEnum):
+    WAITING_FOR_PROGRESS = auto()
+    DOWNLOAD_PROGRESS = auto()
+    ERROR = auto()
