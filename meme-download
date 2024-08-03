@@ -61,9 +61,37 @@ if [[ -z "$URL" ]]; then
   exit 0
 fi
 
+if command -v downloader-cli &>/dev/null; then
+  send-notification \
+    low \
+    2000 \
+    info \
+    'Downloading meme' \
+    "Downloading meme from $URL"
+
+  cd "$MEME_DIR" || exit 1
+
+  if downloader-cli "$URL" &>"$TMP_FILE"; then
+    send-notification \
+      low \
+      2000 \
+      success \
+      'Download finished' \
+      "The MEME from $URL has finished downloading"
+  else
+    send-notification \
+      normal \
+      5000 \
+      error \
+      'Download failed' \
+      "The meme downloader couldn't download the provided page"
+  fi
+  exit 0
+fi
+
 if command -v meme-downloader &>/dev/null; then
-	meme-downloader "$URL"
-	exit 0
+  meme-downloader "$URL"
+  exit 0
 fi
 
 (
