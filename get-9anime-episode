@@ -34,7 +34,7 @@ FORBIDDEN_CDN_URLS = {
 
 
 def get_9anime_page_url(anime_name: str) -> str:
-    return f"{BASE_URL}/anime/{anime_name}"
+    return f"{BASE_URL}/watch/{anime_name}"
 
 
 def get_anime_id(anime_name: str) -> str | None:
