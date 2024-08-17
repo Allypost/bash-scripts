@@ -54,8 +54,6 @@ def download_by_sites(
                 "--ignore-config",
                 "--no-warnings",
                 "--no-check-certificate",
-                "--concurrent-fragments",
-                str(os.cpu_count() or 1),
                 "--abort-on-unavailable-fragments",
                 "--retries",
                 "infinite",
