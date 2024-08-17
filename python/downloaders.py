@@ -1632,6 +1632,8 @@ aliases: Dict[str, str] = {
     "vid2a41.site": "vidplay.xyz",
     "megaf.cc": "vidplay.xyz",
     "1azayf9w.xyz": "filemoon.sx",
+    "smdfs40r.skin": "filemoon.sx",
+    "oaaxpgp3.xyz": "filemoon.sx",
 }
 
 
