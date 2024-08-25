@@ -234,26 +234,6 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
 
     Console.log_dim("Got encrypted response. Breaking...", return_line=True)
 
-    futoken_js = scraper.get(
-        f"{base_url}/futoken?{parsed_url.query}",
-        headers={
-            "Referer": url,
-            "Accept": "*/*",
-        },
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    if not futoken_js.ok:
-        return None
-
-    futoken_js = futoken_js.text
-    futoken = re.search(r"{var\s+[\w]+\s*=\s*'([^']+)'[\W]", futoken_js)
-    if not futoken:
-        return None
-    futoken = futoken.group(1)
-    if not futoken:
-        return None
-    futoken = futoken.replace("\\'", "'")
-
     item_id_resp = DefaultPlayerDeobfuscator.get(
         f"/vrf/vidplay?vrf_data={encode_url_component(page_url_id)}",
     )
@@ -263,13 +243,12 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
     Console.log_dim("Got decrypted response. Fetching sources...", return_line=True)
 
     try:
-        item_id_vrf_url = item_id_resp["vrf_url"]
-        item_id_vrf_h = item_id_resp["vrf_h"]
+        item_id_vrf = item_id_resp["vrf"]
     except Exception:
         return None
 
     resp = scraper.get(
-        f"{base_url}/mediainfo/{item_id_vrf_url}?{parsed_url.query}&h={item_id_vrf_h}",
+        f"{base_url}/mediainfo/{item_id_vrf}?{parsed_url.query}",
         headers={
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Accept-Language": "en-US,en;q=0.5",
@@ -406,7 +385,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
             metadata_cmd = []
             if metadata.has_data():
                 f = tempfile.NamedTemporaryFile(
-                    prefix=f"vidplay_xyz_metadata.{item_id_vrf_h}__{item_id_vrf_url}.",
+                    prefix=f"vidplay_xyz_metadata.{item_id_vrf}.",
                     suffix=".txt",
                     mode="w+",
                     encoding="utf-8",
