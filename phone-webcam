@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+set -exo pipefail
+
+SCRCPY_PID=
+FFMPEG_PID=
+
+function cleanup {
+  if [ -n "$SCRCPY_PID" ]; then
+    kill "$SCRCPY_PID" || true
+  fi
+
+  if [ -n "$FFMPEG_PID" ]; then
+    kill "$FFMPEG_PID" || true
+  fi
+
+  exit 0
+}
+
+# call cleanup when script exits or on SIGINT/SIGTERM/SIGHUP
+trap cleanup EXIT 1 2 3 6 15
+
+adb wait-for-device
+
+doas modprobe -r v4l2loopback
+
+doas modprobe v4l2loopback devices=2 video_nr=9 exclusive_caps=1,1 card_label="Phone-Cam-Raw,Phone-Cam"
+
+v4l2_devices=()
+while IFS= read -r line; do
+  line="${line#"${line%%[![:space:]]*}"}"
+  v4l2_devices+=("$line")
+done < <(v4l2-ctl --list-devices | grep '/dev/video')
+
+if [ "${#v4l2_devices}" -lt 2 ]; then
+  echo "Not enough v4l2 devices found: ${v4l2_devices[*]}"
+  exit 1
+fi
+
+v4l2_raw="${v4l2_devices[0]}"
+v4l2_out="${v4l2_devices[1]}"
+
+scrcpy --video-source=camera --v4l2-sink="$v4l2_raw" --no-audio &
+
+SCRCPY_PID=$!
+
+sleep 2
+
+doas ffmpeg -f v4l2 -i "$v4l2_raw" -vf transpose=1 -f v4l2 "$v4l2_out" &
+
+FFMPEG_PID=$!
+
+wait "$SCRCPY_PID"
