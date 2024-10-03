@@ -151,6 +151,7 @@ def downloader_main(
     download_sites_fn: Callable[[DownloadSitesCtx], list[DownloadSite] | None],
     allowed_series_types: list[str] | set[str],
     with_additional_args: ParseArgumentsExtend | None = None,
+    forbidden_cdn_hostnames: list[str] | set[str] = [],
 ):
     hide_cursor_until_exit()
 
@@ -226,4 +227,5 @@ def downloader_main(
         episode_number=episode_number,
         episode_url=episode_page_url_fn(series_name),
         output_file=f"{number_format % (episode_number + episode_number_offset)}.mp4",
+        forbidden_cdn_hostnames=forbidden_cdn_hostnames,
     )
