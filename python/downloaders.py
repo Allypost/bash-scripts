@@ -8,7 +8,12 @@ import urllib.parse
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Callable, Dict, List, TypeVar, Union, cast
-from urllib.parse import urljoin, urlparse, quote_plus as encode_url_component
+from urllib.parse import (
+    urljoin,
+    urlparse,
+    quote_plus as encode_url_component,
+    urlunparse,
+)
 
 import cloudscraper
 import requests
@@ -517,14 +522,14 @@ def handle__filemoon_sx(url: str) -> HandlerFuncReturn:
     if not packed_script:
         return None
 
-    payload_regex = r"/videop\.setup\((\{.*?\})\);/"
+    payload_regex = r"/\.setup\((\{.*?\})\);/"
     payload = f"""
-    const fn = {packed_script[4:]}
+    const fn = {packed_script[4:]};
     const fnStr = fn.toString();
     const fnDataMatch = {payload_regex}.exec(fnStr);
     const fnData = fnDataMatch[1];
-    eval(`var fnFinalData = ${"{" + "fnData}"}`);
-    console.log(JSON.stringify(fnFinalData));
+    eval(`var fnFinalData = ${"{fnData}"};`);
+    console.log(JSON.stringify(fnFinalData["sources"]));
     """
     r = run_js(payload)
 
@@ -533,7 +538,7 @@ def handle__filemoon_sx(url: str) -> HandlerFuncReturn:
 
     try:
         video_info = json.loads(r)
-        sources = video_info["sources"]
+        sources = video_info
         if len(sources) == 0:
             return None
 
@@ -777,7 +782,9 @@ def handle__dood_ws(url: str) -> HandlerFuncReturn:
     something_url = re.search(r"\$.get\('/pass_md5/([^']+)", page_html, re.IGNORECASE)
     if not something_url:
         return None
-    something_url = f"https://dood.ws/pass_md5/{something_url.group(1)}"
+    parsed_url = urlparse(url)
+    something_url = parsed_url._replace(path=f"/pass_md5/{something_url.group(1)}")
+    something_url = urlunparse(something_url)
 
     response = cloudscraper.create_scraper().get(
         something_url,
@@ -1594,7 +1601,7 @@ aliases: Dict[str, str] = {
     "gogoplay4.com": "gogoplay1.com",
     "gogoplay5.com": "gogoplay1.com",
     "gotaku1.com": "gogoplay1.com",
-    "alions.pro": "filelions.com",
+    "alions.pro": "filemoon.sx",
     "goload.pro": "gogoplay1.com",
     "gogohd.net": "gogoplay1.com",
     "sbplay1.com": "sbplay.one",
