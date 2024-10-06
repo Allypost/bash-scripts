@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 
 EVALUATOR_ENDPOINT = os.getenv(
     "DOWNLOADERS_EVALUATOR_ENDPOINT",
-    "https://emkc.org",
+    "https://emkc.org/api/v2/piston/",
 )
 
 
@@ -17,7 +17,7 @@ def run_code(
     files[].encoding (optional) The encoding scheme used for the file content. One of base64, hex or utf8. Defaults to utf8.
     """
     response = requests.post(
-        url=urljoin(EVALUATOR_ENDPOINT, "/api/v2/piston/execute"),
+        url=urljoin(EVALUATOR_ENDPOINT, "./execute"),
         json={
             "language": language,
             "version": version,
@@ -39,7 +39,7 @@ def run_code(
 
 
 def get_runtimes():
-    url = urljoin(EVALUATOR_ENDPOINT, "/api/v2/piston/runtimes")
+    url = urljoin(EVALUATOR_ENDPOINT, "./runtimes")
 
     return requests.get(url).json()
 
