@@ -1,25 +1,42 @@
 #!/usr/bin/env python3
 
 import argparse
-from itertools import chain
-import os
 import re
-import subprocess
-from typing import Dict, Union
-from bs4 import BeautifulSoup
-from bs4.element import ResultSet
+from typing import Union
+from bs4 import BeautifulSoup, Tag
 import requests
 
-from python.downloaders import get_download_info, sort_download_links
-from python.log.console import Console, Chalk
+from python.helpers.main import (
+    DownloadSite,
+    DownloadSitesCtx,
+    EpisodeNumberNotFoundException,
+    downloader_main,
+)
+from python.log.console import Console
 
-BASE_URL = "https://gogoanime3.net"
+BASE_URL = "https://gogoanime3.co"
+
+ALLOWED_SERIES_TYPES = {
+    "sub",
+    "dub",
+    "raw",
+    "unknown",
+}
+
+FORBIDDEN_CDN_URLS = {
+    "ed.netmagcdn.com",
+    "eb.netmagcdn.com",
+}
+
+
+def get_gogoanime_page_url(anime_name: str) -> str:
+    return f"{BASE_URL}/category/{anime_name}"
 
 
 def get_anime_id(anime_name: str) -> Union[str, None]:
     Console.log_dim("Fetching episode page...", return_line=True)
     response = requests.get(
-        f"{BASE_URL}/category/{anime_name}",
+        get_gogoanime_page_url(anime_name),
     )
 
     if not response.status_code or response.status_code == 404:
@@ -29,18 +46,23 @@ def get_anime_id(anime_name: str) -> Union[str, None]:
     page_html = response.text
 
     Console.log_dim("Parsing HTML...", return_line=True)
-    return BeautifulSoup(
+    page = BeautifulSoup(
         page_html,
-        'html.parser',
-    ).find(
-        id="movie_id",
-    ).attrs["value"]
+        "html.parser",
+    )
+
+    movie_id_el = page.find(id="movie_id")
+    if not isinstance(movie_id_el, Tag):
+        Console.log_dim("No movie id found")
+        return None
+
+    return movie_id_el.attrs["value"]
 
 
-def get_anime_episode_list(anime_id: str) -> Dict[float, str]:
+def get_anime_episode_list(anime_id: str) -> dict[float, str]:
     Console.log_dim("Fetching episode list...", return_line=True)
     response = requests.get(
-        f"https://ajax.gogo-load.com/ajax/load-list-episode?ep_start=0&ep_end=99999999&id={anime_id}"
+        f"https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=0&ep_end=99999999&id={anime_id}"
     )
 
     if not response.status_code:
@@ -52,26 +74,26 @@ def get_anime_episode_list(anime_id: str) -> Dict[float, str]:
     Console.log_dim("Parsing HTML...", return_line=True)
     elements = BeautifulSoup(
         page_html,
-        'html.parser',
+        "html.parser",
     ).find_all(
         "a",
     )
 
     ret = {}
     for ep in elements:
-        ep_str = ep.find(class_='name').text.split(" ")[1]
+        ep_str = ep.find(class_="name").text.split(" ")[1]
         ep_number = float(ep_str)
-        ep_url = ep.attrs['href'].strip()
+        ep_url = ep.attrs["href"].strip()
 
         ret[ep_number] = ep_url
 
     return ret
 
 
-def get_anime_episode_download_server_list(episode_url: str) -> Dict[str, str]:
-    response = requests.get(
-        f"{BASE_URL}{episode_url}"
-    )
+def get_anime_episode_download_server_list(
+    episode_url: str,
+) -> list[DownloadSite] | None:
+    response = requests.get(f"{BASE_URL}{episode_url}")
 
     if not response.status_code:
         Console.log_dim("No episodes found")
@@ -79,219 +101,82 @@ def get_anime_episode_download_server_list(episode_url: str) -> Dict[str, str]:
 
     page_html = response.text
 
-    elements: ResultSet = BeautifulSoup(
+    page_el = BeautifulSoup(
         page_html,
-        'html.parser',
-    ).find(
-        class_="anime_muti_link",
-    ).find_all(
-        "a"
+        "html.parser",
     )
+
+    elements = page_el.find(
+        class_="anime_muti_link",
+    )
+
+    if not isinstance(elements, Tag):
+        Console.log_dim("No download servers found")
+        return None
+
+    elements = elements.find_all("a")
 
     def fix_url(url: Union[str, None]) -> Union[str, None]:
         if not url:
             return None
 
-        if re.compile(r'^https?://').match(url):
+        if re.compile(r"^https?://").match(url):
             return url
 
-        if str(url).startswith('//'):
+        if str(url).startswith("//"):
             return f"https:{url}"
 
         Console.log(f"Unknown url format: `{url}'")
 
         return None
 
-    ret = {}
+    ret: list[DownloadSite] = []
     for element in elements:
         site_name = next(element.stripped_strings)
         site_url = fix_url(element.attrs["data-video"])
 
-        ret[site_name] = site_url
+        if not site_url:
+            continue
+
+        ret.append(DownloadSite(name=site_name, url=site_url, type="unknown"))
 
     return ret
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Download videos from pantsubase.tv",
-        usage="%(prog)s -n 'series-name-here' [options]",
-    )
-
-    parser.add_argument(
-        "series",
-        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
-        type=str,
-        nargs='?',
-    )
-
-    parser.add_argument(
-        "-n, --series-name",
-        help="Name (from the site URL) of the series you want to download (eg. 'shingeki-no-kyojin')",
-        type=str,
-        nargs='?',
-        dest="series_name",
-    )
-
-    parser.add_argument(
-        "-e, --episode",
-        help="Explicitly set which episode to download. Otherwise, latest non-downloaded episode is selected.",
-        type=float,
-        nargs='?',
-        required=False,
-        default=None,
-        dest="episode",
-    )
-
-    parser.add_argument(
-        "-o, --offset",
-        help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
-        type=int,
-        nargs='?',
-        required=False,
-        default=0,
-        dest="offset",
-    )
-
-    parser.add_argument(
-        "-f, --number-format",
-        help="String format on how to name files. Defaults to: %02d",
-        type=str,
-        required=False,
-        default="%02d",
-        dest="number_format",
-    )
-
-    return parser.parse_args()
-
-
-def get_episode_number_to_download(argv) -> float:
-    if argv.episode:
-        return argv.episode
-
-    last_episode_number = os.popen(
-        "ls | sort -h | grep -E '^[0-9]+' | tail -n1 | cut -d'.' -f1"
-    ).read()
-
-    return float(last_episode_number or 0) + 1
-
-
 def main():
-    argv = parse_arguments()
+    def with_additional_args(parser: argparse.ArgumentParser):
+        parser.add_argument(
+            "-o, --offset",
+            help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
+            type=int,
+            nargs="?",
+            required=False,
+            default=0,
+            dest="offset",
+        )
 
-    series_name = argv.series_name or argv.series
-    number_format = argv.number_format
+    def get_download_sites(ctx: DownloadSitesCtx):
+        anime_id = get_anime_id(ctx.series_name)
+        if anime_id is None:
+            Console.log_error(f"Can't fetch page for `{ctx.series_name}'")
+            exit(1)
 
-    if series_name is None:
-        raise Exception("No series name")
+        episodes = get_anime_episode_list(anime_id)
+        if ctx.episode_number not in episodes:
+            raise EpisodeNumberNotFoundException()
 
-    episode_number_offset = argv.offset
-    episode_number = get_episode_number_to_download(argv) - episode_number_offset
+        return get_anime_episode_download_server_list(
+            episodes[ctx.episode_number],
+        )
 
-    Console.log(f'Downloading {Chalk.badge(series_name, Chalk.black, Chalk.bg_yellow_bright)} episode {Chalk.badge(episode_number, Chalk.black, Chalk.bg_blue_bright)}')
-
-    offset_str = f" (offset episode {episode_number + episode_number_offset})" if episode_number_offset else ""
-
-    anime_id = get_anime_id(series_name)
-    if anime_id is None:
-        Console.log_error(f"Can't fetch page for `{series_name}'")
-        exit(1)
-
-    episodes = get_anime_episode_list(anime_id)
-    if episode_number not in episodes:
-        Console.log_error(f"Episode {episode_number}{offset_str} can't be found")
-        exit(1)
-
-    download_sites = get_anime_episode_download_server_list(
-        episodes[episode_number],
+    downloader_main(
+        site_name="gogoanime.to",
+        with_additional_args=with_additional_args,
+        allowed_series_types=ALLOWED_SERIES_TYPES,
+        episode_page_url_fn=get_gogoanime_page_url,
+        download_sites_fn=get_download_sites,
+        forbidden_cdn_hostnames=FORBIDDEN_CDN_URLS,
     )
-
-    download_urls_to_site_name = {
-        v: k
-        for k, v
-        in download_sites.items()
-    }
-
-    sorted_download_sites = sort_download_links(download_sites.values())
-    download_sites = {
-        download_urls_to_site_name[site_url]: site_url
-        for site_url
-        in sorted_download_sites
-    }
-
-    processed = 0
-    for site in download_sites:
-        processed += 1
-        download_url = download_sites[site]
-        try:
-            download_info = get_download_info(download_url)
-            if download_info is None:
-                raise Exception("No handler")
-
-            url = download_info.url
-            referer = download_info.referer or url
-            output_file = f"{number_format % (episode_number + episode_number_offset)}.mp4"
-
-            Console.log(f"{Chalk.colour(Chalk.italic)}Downloading from {site}{Chalk.colour('23m')}")
-
-            download_cmd = [
-                "yt-dlp",
-                "--no-warnings",
-                "--no-check-certificate",
-                "--concurrent-fragments", "16",
-                "--retries", "infinite",
-                "--referer", referer,
-                *list(chain(*[
-                    ["--add-header", header]
-                    for header
-                    in download_info.headers
-                ])),
-                "--output", output_file,
-                url,
-            ]
-            download_line = re.compile(r"\[download\]\s+(\d+\.\d+%.*)")
-
-            with subprocess.Popen(
-                    download_cmd,
-                    stdout=subprocess.PIPE,
-                    bufsize=1,
-                    text=True,
-            ) as proc:
-                for line in proc.stdout:
-                    if not download_line.search(line):
-                        continue
-                    status = line.split(" ", maxsplit=1)[1].strip()
-                    Console.log_dim(status, return_line=True)
-
-                if proc.wait() != 0:
-                    print(subprocess.list2cmdline(download_cmd))
-                    raise Exception("Something broke")
-
-            download_info.after_dl(output_file, download_info)
-        except Exception as e:
-            if str(e) == "No handler":
-                continue
-
-            if str(e) == "Something broke":
-                Console.clear_line()
-                Console.log_error(
-                    f"Failed to download from {site}")
-                continue
-
-            print(("\n" + "=" * 32) * 2)
-            print(e)
-            print(("=" * 32 + "\n") * 2)
-
-        for _ in range(processed):
-            Console.clear_line()
-            Console.move_up(1)
-        Console.log_success(f"Episode {episode_number} downloaded")
-        exit()
-
-    Console.clear_line()
-    Console.move_up(processed)
-    Console.log_error(f"Failed to download episode {episode_number}")
-    exit(1)
 
 
 if __name__ == "__main__":

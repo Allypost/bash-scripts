@@ -160,7 +160,7 @@ def downloader_main(
     series_name = argv.series_name or argv.series
     number_format = argv.number_format
     series_types = parse_series_types(
-        series_types=argv.series_types,
+        series_types=argv.series_types or ["unknown"],
         allowed=allowed_series_types,
     )
 
