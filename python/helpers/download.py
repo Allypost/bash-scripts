@@ -158,6 +158,13 @@ def download_by_sites(
                         Console.log_dim("Connection aborted. Discarding URL")
                         continue
 
+                    if (
+                        "Unable to download webpage: HTTP Error 404: Not Found"
+                        in proc_stderr
+                    ):
+                        Console.log_dim("Got 404. Discarding URL")
+                        continue
+
                     print(subprocess.list2cmdline(download_cmd))
                     raise Exception(
                         f"Something broke ({ecode}):\nSTDERR:\n  {proc_stderr}"

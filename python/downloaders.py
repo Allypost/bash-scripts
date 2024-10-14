@@ -1642,7 +1642,12 @@ def get_download_info(
         else:
             return handlers[domain](url)
     except TypeError as e:
-        return handlers[domain](url)
+        try:
+            return handlers[domain](url)
+        except Exception as e:
+            print(f"Error while handling {url}")
+            print(e)
+            return None
     except Exception as e:
         return None
 

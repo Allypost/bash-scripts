@@ -6,6 +6,7 @@ import os
 import signal
 import sys
 from typing import Callable, Any
+from urllib.parse import urlparse
 
 from python.downloaders import sort_download_links
 from python.helpers.download import download_by_sites
@@ -219,6 +220,17 @@ def downloader_main(
         )
         Console.log(json.dumps(download_sites, default=lambda o: o.__dict__, indent=2))
         exit(0)
+
+    skipped_download_site_urls = []
+    filtered_download_site_urls = []
+    for site in sorted_download_site_urls:
+        parsed_url = urlparse(site.url)
+
+        if parsed_url.netloc in forbidden_cdn_hostnames:
+            skipped_download_site_urls.append(site)
+        else:
+            filtered_download_site_urls.append(site)
+    sorted_download_site_urls = filtered_download_site_urls + skipped_download_site_urls
 
     download_by_sites(
         download_sites={
