@@ -27,6 +27,7 @@ ALLOWED_SERIES_TYPES = {
 
 FORBIDDEN_CDN_URLS = {
     "ed.netmagcdn.com",
+    "eb.netmagcdn.com",
 }
 
 
