@@ -7,10 +7,47 @@ import re
 import subprocess
 from typing import Callable, TypeVar
 from urllib.parse import urlparse
-from python.downloaders import get_download_info
+from python.downloaders import DownloadInfo, get_download_info
 from python.helpers.list import flatten
 from python.helpers.size import human_byte_size
 from python.log.console import Chalk, Console
+
+
+def download_infos(
+    *,
+    sites: dict[str, str],
+    episode_url: str,
+    unwanted_hostnames: list[str] | set[str] = [],
+):
+    last_resort_infos: list[tuple[str, DownloadInfo]] = []
+    for site in sites:
+        download_url = sites[site]
+        try:
+            download_info = get_download_info(download_url, episode_url)
+            if download_info is None:
+                yield (site, None)
+                continue
+        except Exception as _e:
+            yield (site, None)
+            continue
+
+        parsed_url = urlparse(download_info.url)
+        if any(
+            (
+                (parsed_url.hostname or "").endswith(hostname)
+                for hostname in unwanted_hostnames
+            )
+        ):
+            Console.log(
+                f"{Chalk.colour(Chalk.italic)}Skipping {site} to end: {download_info.url}{Chalk.colour('23m')}"
+            )
+            last_resort_infos.append((site, download_info))
+            continue
+
+        yield (site, download_info)
+
+    for download_info_group in last_resort_infos:
+        yield download_info_group
 
 
 def download_by_sites(
@@ -19,29 +56,23 @@ def download_by_sites(
     episode_url: str,
     output_file: str,
     episode_number: int | float,
-    forbidden_cdn_hostnames: list[str] | set[str] = [],
+    unwanted_cdn_hostnames: list[str] | set[str] = [],
 ):
     Console.log_dim("Trying to find download link...", return_line=True)
 
     processed = 0
-    for site in download_sites:
+    for site, download_info in download_infos(
+        sites=download_sites,
+        episode_url=episode_url,
+        unwanted_hostnames=unwanted_cdn_hostnames,
+    ):
         processed += 1
-        download_url = download_sites[site]
         try:
-            download_info = get_download_info(download_url, episode_url)
             if download_info is None:
                 raise NoHandlerException("No handler")
 
             url = download_info.url
             referer = download_info.referer or url
-
-            parsed_url = urlparse(url)
-
-            if parsed_url.hostname in forbidden_cdn_hostnames:
-                Console.log(
-                    f"{Chalk.colour(Chalk.italic)}Skipping {site}: {url}{Chalk.colour('23m')}"
-                )
-                continue
 
             Console.log(
                 f"{Chalk.colour(Chalk.italic)}Downloading from {site}: {url}{Chalk.colour('23m')}"
@@ -175,7 +206,7 @@ def download_by_sites(
             continue
         except Exception as e:
             if isinstance(e, NoHandlerException):
-                Console.log_dim(f"No handler for {download_url} on {site}")
+                Console.log_dim(f"No handler for {download_sites[site]} on {site}")
                 continue
 
             if isinstance(e, DownloadRecoverableException):
@@ -265,7 +296,7 @@ class DownloadProgressInfo:
                 case gen if callable(gen):
                     res = gen()
                     if res is not None:
-                        out.append(res)
+                        out.append(str(res))
                 case value:
                     out.append(str(value))
         return " ".join(out)

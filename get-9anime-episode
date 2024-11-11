@@ -28,8 +28,8 @@ ALLOWED_SERIES_TYPES = {
     "dub",
 }
 
-FORBIDDEN_CDN_URLS = {
-    # "ed.netmagcdn.com"
+UNWANTED_CDN_HOSTNAMES = {
+    ".netmagcdn.com",
 }
 
 
@@ -345,6 +345,7 @@ def main():
         allowed_series_types=ALLOWED_SERIES_TYPES,
         episode_page_url_fn=get_9anime_page_url,
         download_sites_fn=get_download_sites,
+        unwanted_cdn_hostnames=UNWANTED_CDN_HOSTNAMES,
     )
 
 

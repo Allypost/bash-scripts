@@ -6,7 +6,6 @@ import os
 import signal
 import sys
 from typing import Callable, Any
-from urllib.parse import urlparse
 
 from python.downloaders import sort_download_links
 from python.helpers.download import download_by_sites
@@ -152,7 +151,7 @@ def downloader_main(
     download_sites_fn: Callable[[DownloadSitesCtx], list[DownloadSite] | None],
     allowed_series_types: list[str] | set[str],
     with_additional_args: ParseArgumentsExtend | None = None,
-    forbidden_cdn_hostnames: list[str] | set[str] = [],
+    unwanted_cdn_hostnames: list[str] | set[str] = [],
 ):
     hide_cursor_until_exit()
 
@@ -221,17 +220,6 @@ def downloader_main(
         Console.log(json.dumps(download_sites, default=lambda o: o.__dict__, indent=2))
         exit(0)
 
-    skipped_download_site_urls = []
-    filtered_download_site_urls = []
-    for site in sorted_download_site_urls:
-        parsed_url = urlparse(site.url)
-
-        if parsed_url.netloc in forbidden_cdn_hostnames:
-            skipped_download_site_urls.append(site)
-        else:
-            filtered_download_site_urls.append(site)
-    sorted_download_site_urls = filtered_download_site_urls + skipped_download_site_urls
-
     download_by_sites(
         download_sites={
             f"{item.name} {item.type}": item.url for item in sorted_download_site_urls
@@ -239,5 +227,5 @@ def downloader_main(
         episode_number=episode_number,
         episode_url=episode_page_url_fn(series_name),
         output_file=f"{number_format % (episode_number + episode_number_offset)}.mp4",
-        forbidden_cdn_hostnames=forbidden_cdn_hostnames,
+        unwanted_cdn_hostnames=unwanted_cdn_hostnames,
     )

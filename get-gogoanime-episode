@@ -23,9 +23,8 @@ ALLOWED_SERIES_TYPES = {
     "unknown",
 }
 
-FORBIDDEN_CDN_URLS = {
-    "ed.netmagcdn.com",
-    "eb.netmagcdn.com",
+UNWANTED_CDN_HOSTNAMES = {
+    ".netmagcdn.com",
 }
 
 
@@ -175,7 +174,7 @@ def main():
         allowed_series_types=ALLOWED_SERIES_TYPES,
         episode_page_url_fn=get_gogoanime_page_url,
         download_sites_fn=get_download_sites,
-        forbidden_cdn_hostnames=FORBIDDEN_CDN_URLS,
+        unwanted_cdn_hostnames=UNWANTED_CDN_HOSTNAMES,
     )
 
 
