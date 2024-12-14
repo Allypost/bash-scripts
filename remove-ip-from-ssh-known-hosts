@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+IP="$1"
+
+if [ -z "$IP" ]; then
+  echo "Usage: $0 1.2.3.4"
+  exit 1
+fi
+
+rg --line-number "$IP" ~/.ssh/known_hosts |
+  cut -d':' -f1 |
+  sort -r |
+  while IFS= read -r num; do
+    sed -i "${num}d" ~/.ssh/known_hosts
+  done
