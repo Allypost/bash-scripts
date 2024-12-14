@@ -36,6 +36,10 @@ from .runners.js import run_js
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS = 60.0
+DEFAULT_USER_AGENT = os.getenv(
+    "DOWNLOADERS_USER_AGENT",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Safari/537.36",
+)
 
 
 @dataclass
@@ -92,7 +96,7 @@ def handle__instagram_com(url: str) -> Union[List[str], None]:
             api_url,
             headers={
                 "Cookie": session_cookie(),
-                "User-Agent": "Instagram post download script (personal use only I swar)",
+                "User-Agent": DEFAULT_USER_AGENT,
             },
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
@@ -133,7 +137,7 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
         cloudscraper.create_scraper()
         .get(
             download_page,
-            headers={"User-Agent": "Gogo stream video downloader"},
+            headers={"User-Agent": DEFAULT_USER_AGENT},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .text
@@ -188,7 +192,7 @@ def handle__sbplay_one(url: str) -> HandlerFuncReturn:
         cloudscraper.create_scraper()
         .get(
             download_generator_url,
-            headers={"User-Agent": "Gogo stream video downloader"},
+            headers={"User-Agent": DEFAULT_USER_AGENT},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .text
@@ -208,7 +212,7 @@ def handle__mixdrop_co(url: str) -> HandlerFuncReturn:
         cloudscraper.create_scraper()
         .get(
             url,
-            headers={"User-Agent": "Gogo stream video downloader"},
+            headers={"User-Agent": DEFAULT_USER_AGENT},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         .text
@@ -698,7 +702,7 @@ def handle__gogoplay1_com(url: str) -> HandlerFuncReturn:
         response = cloudscraper.create_scraper().get(
             api_url,
             headers={
-                "User-Agent": "Gogo stream video downloader",
+                "User-Agent": DEFAULT_USER_AGENT,
                 "Referer": url,
                 "x-requested-with": "XMLHttpRequest",
             },
@@ -789,7 +793,7 @@ def handle__dood_ws(url: str) -> HandlerFuncReturn:
     response = cloudscraper.create_scraper().get(
         something_url,
         headers={
-            "User-Agent": "Gogo stream video downloader",
+            "User-Agent": DEFAULT_USER_AGENT,
             "Referer": url,
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -812,7 +816,7 @@ def handle__fembed_hd_com(url: str) -> HandlerFuncReturn:
             "d": "fembed-hd.com",
         },
         headers={
-            "User-Agent": "Gogo stream video downloader",
+            "User-Agent": DEFAULT_USER_AGENT,
             "Referer": url,
             "x-requested-with": "XMLHttpRequest",
         },
@@ -846,7 +850,7 @@ def handle__streamtape_net(url: str) -> HandlerFuncReturn:
     response = cloudscraper.create_scraper().get(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36",
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
             "Referer": url,
         },
@@ -937,14 +941,13 @@ def handle__watchsb_com(url: str) -> HandlerFuncReturn:
 
 
 def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
-    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
     accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
     scraper = cloudscraper.create_scraper()
     response = scraper.get(
         url,
         headers={
             "Referer": referer,
-            "User-Agent": user_agent,
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -972,7 +975,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
         f"https://megacloud.tv/embed-2/ajax/e-1/getSources?id={item_id}",
         headers={
             "Referer": url,
-            "User-Agent": user_agent,
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -1244,21 +1247,20 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
             "Accept: */*",
             f"Accept-Language: {accept_language}",
             # "Origin: https://rapid-cloud.co",
-            f"User-Agent: {user_agent}",
+            f"User-Agent: {DEFAULT_USER_AGENT}",
         ],
         after_dl=after_dl,
     )
 
 
 def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
-    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
     accept_language = "en-GB,en-US;q=0.9,en;q=0.8,hr;q=0.7"
     scraper = cloudscraper.create_scraper()
     response = scraper.get(
         url,
         headers={
             "Referer": referer,
-            "User-Agent": user_agent,
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -1284,7 +1286,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
         headers={
             "Referer": url,
-            "User-Agent": user_agent,
+            "User-Agent": DEFAULT_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -1416,7 +1418,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
         #     f"https://rapid-cloud.co/ajax/embed-6/getSources?id={item_id}",
         #     headers={
         #         "Referer": url,
-        #         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+        #         "User-Agent": DEFAULT_USER_AGENT,
         #         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
         #     },
         # )
@@ -1512,7 +1514,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             "Accept: */*",
             f"Accept-Language: {accept_language}",
             # "Origin: https://rapid.cloud.co",
-            f"User-Agent: {user_agent}",
+            f"User-Agent: {DEFAULT_USER_AGENT}",
         ],
         after_dl=after_dl,
     )
