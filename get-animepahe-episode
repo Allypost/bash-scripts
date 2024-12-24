@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+
+import argparse
+import re
+import time
+from dataclasses import dataclass
+from typing import Union
+
+import cloudscraper
+import requests
+from bs4 import BeautifulSoup
+
+from python.helpers.main import (
+    DownloadSite,
+    DownloadSitesCtx,
+    EpisodeNumberNotFoundException,
+    downloader_main,
+)
+from python.log.console import Console
+
+BASE_URL = "https://animepahe.ru"
+
+ALLOWED_SERIES_TYPES = {
+    "jpn",
+    "eng",
+    "unknown",
+}
+
+UNWANTED_CDN_HOSTNAMES = {
+    ".netmagcdn.com",
+}
+
+
+def get_animepahe_anime_url(anime_name: str) -> str:
+    return f"{BASE_URL}/anime/{anime_name}"
+
+
+@dataclass
+class EpisodeInfo:
+    anime_id: str
+    number: float
+    title: str
+    id: str
+    session: str
+    is_filler: bool = False
+
+
+def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
+    Console.log_dim("Fetching episode list...", return_line=True)
+    ret = {}
+    page = 1
+    page_try = 0
+    while True:
+        Console.log_dim(f"Fetching page {page} from API", return_line=True)
+        scraper = cloudscraper.create_scraper(
+            browser={
+                "desktop": True,
+            }
+        )
+        response = scraper.get(
+            f"https://animepahe.ru/api?m=release&id={anime_id}&sort=episode_desc&page={page}"
+        )
+
+        if response.status_code == 403:
+            page_try += 1
+            Console.log_dim(
+                f"Got 403 for episode list API. Retrying... (Attempt {page_try})",
+                return_line=True,
+            )
+            time.sleep(0.3 + 0.2 * page_try)
+            continue
+        page_try = 0
+
+        if not response.ok:
+            Console.log_dim("Couldn't fetch API info")
+            return {}
+
+        Console.log_dim(f"Parsing info for page {page}", return_line=True)
+        page += 1
+        response = response.json()
+        if not isinstance(response, dict):
+            break
+        if "data" not in response:
+            break
+        data = response["data"]
+        if not data:
+            break
+
+        for item in data:
+            ep = float(item["episode"])
+            ret[ep] = EpisodeInfo(
+                anime_id=anime_id,
+                number=ep,
+                title=item["title"],
+                id=item["id"],
+                session=item["session"],
+                is_filler=bool(item["filler"]),
+            )
+
+        if "next_page_url" not in response or not response["next_page_url"]:
+            break
+
+    return ret
+
+
+def get_anime_episode_download_server_list(
+    episode_info: EpisodeInfo,
+) -> list[DownloadSite] | None:
+    response: requests.Response | None = None
+    page_try = 0
+    while not response:
+        Console.log_dim("Fetching download servers...", return_line=True)
+        response = cloudscraper.create_scraper().get(
+            f"{BASE_URL}/play/{episode_info.anime_id}/{episode_info.session}"
+        )
+
+        if response.status_code == 403:
+            page_try += 1
+            Console.log_dim(
+                f"Got 403 fetching DL servers. Retrying... (Attempt {page_try})",
+                return_line=True,
+            )
+            time.sleep(0.3 + 0.2 * page_try)
+            continue
+
+        if not response.ok:
+            Console.log_dim("Couldn't fetch anime player page")
+            return None
+
+    page_html = response.text
+
+    page_el = BeautifulSoup(
+        page_html,
+        "html.parser",
+    )
+
+    elements = page_el.select("#resolutionMenu button[data-src]")
+
+    def fix_url(url: Union[str, None]) -> Union[str, None]:
+        if not url:
+            return None
+
+        if re.compile(r"^https?://").match(url):
+            return url
+
+        if str(url).startswith("//"):
+            return f"https:{url}"
+
+        Console.log(f"Unknown url format: `{url}'")
+
+        return None
+
+    ret: list[DownloadSite] = []
+    for element in elements:
+        embed_url = fix_url(element.attrs.get("data-src"))
+        if not embed_url:
+            continue
+
+        site_name = next(element.stripped_strings)
+        audio = str(element.attrs.get("data-audio", "jpn"))
+        resolution = int(element.attrs.get("data-resolution", 0))
+
+        ret.append(
+            DownloadSite(
+                name=site_name,
+                url=embed_url,
+                type=audio,
+                other={"resolution": resolution},
+            )
+        )
+
+    ret = list(sorted(ret, key=lambda x: -x.other.get("resolution", 0)))
+
+    return ret
+
+
+def main():
+    def with_additional_args(parser: argparse.ArgumentParser):
+        parser.add_argument(
+            "-o, --offset",
+            help="Set episode name offset (eg. -o 3 will name the first episode 4). Useful for when a season is split into multiple parts.",
+            type=int,
+            nargs="?",
+            required=False,
+            default=0,
+            dest="offset",
+        )
+
+    def get_download_sites(ctx: DownloadSitesCtx):
+        anime_id = ctx.series_name
+        if anime_id is None:
+            Console.log_error(f"Can't fetch page for `{ctx.series_name}'")
+            exit(1)
+
+        episodes = get_anime_episode_list(anime_id)
+        if ctx.episode_number not in episodes:
+            raise EpisodeNumberNotFoundException()
+
+        return get_anime_episode_download_server_list(
+            episodes[ctx.episode_number],
+        )
+
+    downloader_main(
+        site_name="animepahe.ru",
+        with_additional_args=with_additional_args,
+        allowed_series_types=ALLOWED_SERIES_TYPES,
+        episode_page_url_fn=get_animepahe_anime_url,
+        download_sites_fn=get_download_sites,
+        unwanted_cdn_hostnames=UNWANTED_CDN_HOSTNAMES,
+    )
+
+
+if __name__ == "__main__":
+    main()
