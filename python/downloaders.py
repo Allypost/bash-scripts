@@ -1,17 +1,20 @@
-from fractions import Fraction
 import json
 import os
 import re
 import subprocess
 import tempfile
+import time
 import urllib.parse
 from dataclasses import dataclass, field
+from fractions import Fraction
 from itertools import chain
 from typing import Callable, Dict, List, TypeVar, Union, cast
 from urllib.parse import (
+    quote_plus as encode_url_component,
+)
+from urllib.parse import (
     urljoin,
     urlparse,
-    quote_plus as encode_url_component,
     urlunparse,
 )
 
@@ -32,7 +35,6 @@ import playwright.sync_api
 from playwright.sync_api import sync_playwright
 
 from .runners.js import run_js
-
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 REQUEST_TIMEOUT_DEOBFUSCATE_SECONDS = 60.0
@@ -553,6 +555,247 @@ def handle__filemoon_sx(url: str) -> HandlerFuncReturn:
         return None
 
     return DownloadInfo(url=video_url, referer=url)
+
+
+def handle__pahe_win(url: str, referer: str) -> HandlerFuncReturn:
+    page_try = 0
+    response: requests.Response | None = None
+    while not response:
+        response = cloudscraper.create_scraper().get(
+            url,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            headers={
+                "referer": referer,
+            },
+        )
+
+        if page_try > 20:
+            return None
+
+        if response.status_code == 403:
+            page_try += 1
+            Console.log_dim(
+                f"Got 403 fetching page.win page. Retrying... (Attempt {page_try})",
+                return_line=True,
+            )
+            time.sleep(0.3 + 0.2 * page_try)
+            continue
+
+        if not response.ok:
+            Console.log_dim("Couldn't fetch page.win page")
+            return None
+
+    page_html = response.text
+    script_tag = BeautifulSoup(page_html, "html.parser").find(
+        lambda tag: tag.name == "script" and "a.redirect" in str(tag.string)
+    )
+
+    if not isinstance(script_tag, Tag):
+        return None
+
+    script_tag = script_tag.string
+
+    if not script_tag:
+        return None
+
+    redirect_url = re.search(
+        r'\$\("a.redirect"\).attr\("href","([^"]+)"\).html\("Continue"\);', script_tag
+    )
+    if not redirect_url:
+        return None
+    redirect_url = redirect_url.group(1)
+
+    return get_download_info(redirect_url, url)
+
+
+def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
+    scraper = cloudscraper.create_scraper()
+
+    def handle_embed(url: str):
+        page_try = 0
+        response: requests.Response | None = None
+        while not response:
+            Console.log_dim("Fetching kwik.si embed page...", return_line=True)
+            response = cloudscraper.create_scraper().get(
+                url,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+                headers={
+                    "referer": referer,
+                },
+            )
+
+            if page_try > 20:
+                return None
+
+            if response.status_code == 403:
+                page_try += 1
+                Console.log_dim(
+                    f"Got 403 fetching kwik.si embed page. Retrying... (Attempt {page_try})",
+                    return_line=True,
+                )
+                time.sleep(0.3 + 0.2 * page_try)
+                continue
+
+            if not response.ok:
+                Console.log_dim("Couldn't fetch page.win page")
+                return None
+
+        page_html = response.text
+
+        script_with_src = BeautifulSoup(page_html, "html.parser").find(
+            lambda tag: tag.name == "script"
+            and "eval(" in str(tag.string)
+            and ";eval(" in str(tag.string)
+        )
+        script_with_src = (
+            script_with_src.string if isinstance(script_with_src, Tag) else None
+        )
+
+        if not script_with_src:
+            return None
+
+        interesting_code = script_with_src.split(";eval(")[1][:-1]
+        code_to_run = f"console.log(String({interesting_code}.substring(0, 1500))"
+        run_js_result = run_js(code_to_run)
+        if not run_js_result:
+            return None
+
+        source_match = re.search(r"source\s*=\s*'([^']+)'\s*;", run_js_result)
+        source = source_match.group(1) if source_match else None
+        if not source:
+            return None
+
+        return source
+
+    def handle_info(url: str):
+        page_try = 0
+        response: requests.Response | None = None
+        while not response:
+            Console.log_dim("Fetching kwik.si info page...", return_line=True)
+            response = cloudscraper.create_scraper().get(
+                url,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+                headers={
+                    "referer": referer,
+                },
+            )
+
+            if page_try > 20:
+                return None
+
+            if response.status_code == 403:
+                page_try += 1
+                Console.log_dim(
+                    f"Got 403 fetching kwik.si info page. Retrying... (Attempt {page_try})",
+                    return_line=True,
+                )
+                time.sleep(0.3 + 0.2 * page_try)
+                continue
+
+            if not response.ok:
+                Console.log_dim("Couldn't fetch page.win page")
+                return None
+
+        page_html = response.text
+        script_with_src = BeautifulSoup(page_html, "html.parser").find(
+            lambda tag: tag.name == "script"
+            and "decodeURIComponent(escape(" in str(tag.string)
+        )
+        if isinstance(script_with_src, Tag):
+            script_with_src = script_with_src.string
+        else:
+            script_with_src = None
+
+        if not script_with_src:
+            return None
+
+        src_without_eval = (
+            r'var _ENCODE_URI_TO_ESCAPE_LUT = [["!","%21"],["\'","%27"],["(","%28"],[")","%29"],["+","+"],["/","/"],["@","@"],["~","%7E"],["%C2%80","%80"],["%C2%81","%81"],["%C2%82","%82"],["%C2%83","%83"],["%C2%84","%84"],["%C2%85","%85"],["%C2%86","%86"],["%C2%87","%87"],["%C2%88","%88"],["%C2%89","%89"],["%C2%8A","%8A"],["%C2%8B","%8B"],["%C2%8C","%8C"],["%C2%8D","%8D"],["%C2%8E","%8E"],["%C2%8F","%8F"],["%C2%90","%90"],["%C2%91","%91"],["%C2%92","%92"],["%C2%93","%93"],["%C2%94","%94"],["%C2%95","%95"],["%C2%96","%96"],["%C2%97","%97"],["%C2%98","%98"],["%C2%99","%99"],["%C2%9A","%9A"],["%C2%9B","%9B"],["%C2%9C","%9C"],["%C2%9D","%9D"],["%C2%9E","%9E"],["%C2%9F","%9F"],["%C2%A0","%A0"],["%C2%A1","%A1"],["%C2%A2","%A2"],["%C2%A3","%A3"],["%C2%A4","%A4"],["%C2%A5","%A5"],["%C2%A6","%A6"],["%C2%A7","%A7"],["%C2%A8","%A8"],["%C2%A9","%A9"],["%C2%AA","%AA"],["%C2%AB","%AB"],["%C2%AC","%AC"],["%C2%AD","%AD"],["%C2%AE","%AE"],["%C2%AF","%AF"],["%C2%B0","%B0"],["%C2%B1","%B1"],["%C2%B2","%B2"],["%C2%B3","%B3"],["%C2%B4","%B4"],["%C2%B5","%B5"],["%C2%B6","%B6"],["%C2%B7","%B7"],["%C2%B8","%B8"],["%C2%B9","%B9"],["%C2%BA","%BA"],["%C2%BB","%BB"],["%C2%BC","%BC"],["%C2%BD","%BD"],["%C2%BE","%BE"],["%C2%BF","%BF"],["%C3%80","%C0"],["%C3%81","%C1"],["%C3%82","%C2"],["%C3%83","%C3"],["%C3%84","%C4"],["%C3%85","%C5"],["%C3%86","%C6"],["%C3%87","%C7"],["%C3%88","%C8"],["%C3%89","%C9"],["%C3%8A","%CA"],["%C3%8B","%CB"],["%C3%8C","%CC"],["%C3%8D","%CD"],["%C3%8E","%CE"],["%C3%8F","%CF"],["%C3%90","%D0"],["%C3%91","%D1"],["%C3%92","%D2"],["%C3%93","%D3"],["%C3%94","%D4"],["%C3%95","%D5"],["%C3%96","%D6"],["%C3%97","%D7"],["%C3%98","%D8"],["%C3%99","%D9"],["%C3%9A","%DA"],["%C3%9B","%DB"],["%C3%9C","%DC"],["%C3%9D","%DD"],["%C3%9E","%DE"],["%C3%9F","%DF"],["%C3%A0","%E0"],["%C3%A1","%E1"],["%C3%A2","%E2"],["%C3%A3","%E3"],["%C3%A4","%E4"],["%C3%A5","%E5"],["%C3%A6","%E6"],["%C3%A7","%E7"],["%C3%A8","%E8"],["%C3%A9","%E9"],["%C3%AA","%EA"],["%C3%AB","%EB"],["%C3%AC","%EC"],["%C3%AD","%ED"],["%C3%AE","%EE"],["%C3%AF","%EF"],["%C3%B0","%F0"],["%C3%B1","%F1"],["%C3%B2","%F2"],["%C3%B3","%F3"],["%C3%B4","%F4"],["%C3%B5","%F5"],["%C3%B6","%F6"],["%C3%B7","%F7"],["%C3%B8","%F8"],["%C3%B9","%F9"],["%C3%BA","%FA"],["%C3%BB","%FB"],["%C3%BC","%FC"],["%C3%BD","%FD"],["%C3%BE","%FE"],["%C3%BF","%FF"]];'
+            + """
+            ;
+            function escape(string) {
+                let str = encodeURI(string);
+                for (const [encodeUriChar, escapeChar] of _ENCODE_URI_TO_ESCAPE_LUT) {
+                    str = str.replaceAll(encodeUriChar, escapeChar);
+                }
+                return str;
+            }
+            function __HANDLE_RESULT(result) {
+                result = String(result);
+                var resultLen = result.length;
+                var last1500Chars = String(result).substr(resultLen - 1500, 1500);
+                console.log(last1500Chars);
+            }
+            ;
+            """
+            + script_with_src.replace("eval(", "__HANDLE_RESULT(")
+        )
+        run_js_result = run_js(src_without_eval)
+        if not run_js_result:
+            return None
+
+        form_match = re.search(
+            r'(<form action="https://kwik.si/d/[^"]+" method="POST">[^\']+</form>)',
+            run_js_result,
+        )
+        form_match = form_match.group(1) if form_match else None
+        if not form_match:
+            return None
+
+        form_match = BeautifulSoup(form_match, "html.parser").find("form")
+        if not isinstance(form_match, Tag):
+            return None
+        download_url = form_match.attrs["action"]
+        download_token = form_match.select_one('input[type=hidden][name="_token"]')
+        if not isinstance(download_token, Tag):
+            return None
+        download_token = download_token.attrs["value"]
+
+        try:
+            download_resp = scraper.post(
+                download_url,
+                data=f"_token={download_token}",
+                headers={
+                    "content-type": "application/x-www-form-urlencoded",
+                    "referer": url,
+                    "origin": parsed_url.netloc,
+                },
+                allow_redirects=False,
+            )
+        except Exception as e:
+            Console.log_dim(f"Got exception while downloading: {e}")
+            return None
+
+        redirect_url = download_resp.headers["location"]
+        if not redirect_url:
+            return None
+
+        return redirect_url
+
+    parsed_url = urlparse(url)
+    url_path_parts = parsed_url.path.split("/")
+    url_type = url_path_parts[-2]
+
+    m3u8_url: None | str = None
+    match url_type:
+        case "e":
+            m3u8_url = handle_embed(url)
+        case "f":
+            m3u8_url = handle_info(url)
+
+    if not m3u8_url:
+        return None
+
+    user_agent_headers = scraper.user_agent.headers
+    user_agent = user_agent_headers["User-Agent"] if user_agent_headers else None
+
+    return DownloadInfo(
+        url=m3u8_url,
+        referer=url,
+        headers=[
+            f"user-agent: {user_agent}",
+        ],
+    )
 
 
 def handle__www_mp4upload_com(url: str) -> HandlerFuncReturn:
@@ -1593,6 +1836,8 @@ handlers: Dict[
     "play.api-web.site": handle__play_api_web_site,
     "streamtape.net": handle__streamtape_net,
     "filemoon.sx": handle__filemoon_sx,
+    "kwik.si": handle__kwik_si,
+    "pahe.win": handle__pahe_win,
 }
 
 aliases: Dict[str, str] = {
@@ -1640,17 +1885,17 @@ def get_download_info(
 
     try:
         if referer is not None:
-            return handlers[domain](url, referer)
+            return handlers[domain](url, referer)  # type: ignore
         else:
-            return handlers[domain](url)
-    except TypeError as e:
+            return handlers[domain](url)  # type: ignore
+    except TypeError as _e:
         try:
-            return handlers[domain](url)
+            return handlers[domain](url)  # type: ignore
         except Exception as e:
             print(f"Error while handling {url}")
             print(e)
             return None
-    except Exception as e:
+    except Exception as _e:
         return None
 
 
