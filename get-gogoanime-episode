@@ -14,7 +14,7 @@ from python.helpers.main import (
 )
 from python.log.console import Console
 
-BASE_URL = "https://gogoanime3.co"
+BASE_URL = "https://gogoanime3.cc"
 
 ALLOWED_SERIES_TYPES = {
     "sub",
