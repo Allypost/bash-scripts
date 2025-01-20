@@ -625,6 +625,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
             )
 
             if page_try > 20:
+                Console.log_dim("Giving up on kwik.si embed page after 20 tries")
                 return None
 
             if response.status_code == 403:
@@ -658,11 +659,13 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
         code_to_run = f"console.log(String({interesting_code}.substring(0, 1500))"
         run_js_result = run_js(code_to_run)
         if not run_js_result:
+            Console.log_dim("Couldn't run js for kwik.si embed page")
             return None
 
         source_match = re.search(r"source\s*=\s*'([^']+)'\s*;", run_js_result)
         source = source_match.group(1) if source_match else None
         if not source:
+            Console.log_dim("Couldn't find source for kwik.si embed page")
             return None
 
         return source
@@ -681,6 +684,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
             )
 
             if page_try > 20:
+                Console.log_dim("Giving up on kwik.si info page after 20 tries")
                 return None
 
             if response.status_code == 403:
@@ -693,7 +697,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
                 continue
 
             if not response.ok:
-                Console.log_dim("Couldn't fetch page.win page")
+                Console.log_dim("Couldn't fetch kwik.si page")
                 return None
 
         page_html = response.text
@@ -704,6 +708,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
         if isinstance(script_with_src, Tag):
             script_with_src = script_with_src.string
         else:
+            Console.log_dim("Couldn't find script with src for kwik.si embed page")
             script_with_src = None
 
         if not script_with_src:
@@ -732,6 +737,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
         )
         run_js_result = run_js(src_without_eval)
         if not run_js_result:
+            Console.log_dim("kwik.si info page js eval failed")
             return None
 
         form_match = re.search(
@@ -740,14 +746,17 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
         )
         form_match = form_match.group(1) if form_match else None
         if not form_match:
+            Console.log_dim("Couldn't find form in kwik.si eval result")
             return None
 
         form_match = BeautifulSoup(form_match, "html.parser").find("form")
         if not isinstance(form_match, Tag):
+            Console.log_dim("Couldn't find form in kwik.si eval result")
             return None
         download_url = form_match.attrs["action"]
         download_token = form_match.select_one('input[type=hidden][name="_token"]')
         if not isinstance(download_token, Tag):
+            Console.log_dim("Couldn't find download token in kwik.si eval result")
             return None
         download_token = download_token.attrs["value"]
 
@@ -768,6 +777,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
 
         redirect_url = download_resp.headers["location"]
         if not redirect_url:
+            Console.log_dim("Couldn't find redirect url for kwik.si download thing")
             return None
 
         return redirect_url
