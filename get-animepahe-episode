@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+import random
 import re
+import string
 import time
 from dataclasses import dataclass
 from typing import Union
@@ -31,8 +33,8 @@ UNWANTED_CDN_HOSTNAMES = {
 }
 
 
-def get_animepahe_anime_url(anime_name: str) -> str:
-    return f"{BASE_URL}/anime/{anime_name}"
+def get_animepahe_anime_url(anime_id: str) -> str:
+    return f"{BASE_URL}/a/{anime_id}"
 
 
 @dataclass
@@ -45,20 +47,32 @@ class EpisodeInfo:
     is_filler: bool = False
 
 
-def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
+def the_cookie():
+    rand_str = "".join(random.choices(string.ascii_letters + string.digits, k=16))
+    return f"__ddg2_={rand_str}"
+
+
+def create_scraper():
+    return cloudscraper.create_scraper(
+        browser={
+            "desktop": True,
+        },
+    )
+
+
+def get_anime_episode_list(anime_session_id: str) -> dict[float, EpisodeInfo]:
     Console.log_dim("Fetching episode list...", return_line=True)
     ret = {}
     page = 1
     page_try = 0
     while True:
         Console.log_dim(f"Fetching page {page} from API", return_line=True)
-        scraper = cloudscraper.create_scraper(
-            browser={
-                "desktop": True,
-            }
-        )
+        scraper = create_scraper()
         response = scraper.get(
-            f"https://animepahe.ru/api?m=release&id={anime_id}&sort=episode_desc&page={page}"
+            f"{BASE_URL}/api?m=release&id={anime_session_id}&sort=episode_desc&page={page}",
+            headers={
+                "Cookie": the_cookie(),
+            },
         )
 
         if response.status_code == 403:
@@ -70,6 +84,12 @@ def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
             time.sleep(0.3 + 0.2 * page_try)
             continue
         page_try = 0
+
+        if response.status_code == 404:
+            Console.log_dim(
+                f"Got 404 for episode list API. Check if ID is correct: {BASE_URL}/anime/{anime_session_id}"
+            )
+            return {}
 
         if not response.ok:
             Console.log_dim("Couldn't fetch API info")
@@ -89,7 +109,7 @@ def get_anime_episode_list(anime_id: str) -> dict[float, EpisodeInfo]:
         for item in data:
             ep = float(item["episode"])
             ret[ep] = EpisodeInfo(
-                anime_id=anime_id,
+                anime_id=anime_session_id,
                 number=ep,
                 title=item["title"],
                 id=item["id"],
@@ -110,8 +130,11 @@ def get_anime_episode_download_server_list(
     page_try = 0
     while not response:
         Console.log_dim("Fetching download servers...", return_line=True)
-        response = cloudscraper.create_scraper().get(
-            f"{BASE_URL}/play/{episode_info.anime_id}/{episode_info.session}"
+        response = create_scraper().get(
+            f"{BASE_URL}/play/{episode_info.anime_id}/{episode_info.session}",
+            headers={
+                "Cookie": the_cookie(),
+            },
         )
 
         if response.status_code == 403:
@@ -174,6 +197,51 @@ def get_anime_episode_download_server_list(
     return ret
 
 
+def get_anime_session_id(anime_name: str) -> str | None:
+    # if it is not just a number, assume it's an anime ID
+    if not re.compile(r"^\d+$").match(anime_name):
+        return anime_name
+
+    response: requests.Response | None = None
+    page_try = 0
+    while not response:
+        Console.log_dim("Fetching anime page...", return_line=True)
+        response = create_scraper().get(
+            f"{BASE_URL}/a/{anime_name}",
+            allow_redirects=True,
+            headers={
+                "cookie": the_cookie(),
+            },
+        )
+
+        if response.status_code == 403:
+            page_try += 1
+            Console.log_dim(
+                f"Got 403 fetching anime page. Retrying... (Attempt {page_try})",
+                return_line=True,
+            )
+            time.sleep(0.3 + 0.2 * page_try)
+            continue
+
+        if not response.ok:
+            Console.log_dim("Couldn't fetch anime page")
+            return None
+
+    page_html = response.text
+
+    page_el = BeautifulSoup(
+        page_html,
+        "html.parser",
+    )
+
+    meta_url_el = page_el.select_one('meta[property="og:url"]')
+    if not meta_url_el:
+        Console.log_dim("Couldn't find anime ID in page")
+        return None
+
+    return meta_url_el.attrs.get("content", "").split("/")[-1]
+
+
 def main():
     def with_additional_args(parser: argparse.ArgumentParser):
         parser.add_argument(
@@ -187,7 +255,7 @@ def main():
         )
 
     def get_download_sites(ctx: DownloadSitesCtx):
-        anime_id = ctx.series_name
+        anime_id = get_anime_session_id(ctx.series_name)
         if anime_id is None:
             Console.log_error(f"Can't fetch page for `{ctx.series_name}'")
             exit(1)
