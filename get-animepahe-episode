@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Union
 
 import cloudscraper
-import requests
 from bs4 import BeautifulSoup
 
 from python.helpers.main import (
@@ -18,6 +17,7 @@ from python.helpers.main import (
     EpisodeNumberNotFoundException,
     downloader_main,
 )
+from python.helpers.retried_download import retried_download
 from python.log.console import Console
 
 BASE_URL = "https://animepahe.ru"
@@ -126,29 +126,18 @@ def get_anime_episode_list(anime_session_id: str) -> dict[float, EpisodeInfo]:
 def get_anime_episode_download_server_list(
     episode_info: EpisodeInfo,
 ) -> list[DownloadSite] | None:
-    response: requests.Response | None = None
-    page_try = 0
-    while not response:
-        Console.log_dim("Fetching download servers...", return_line=True)
-        response = create_scraper().get(
+    response = retried_download(
+        "download servers",
+        lambda: create_scraper().get(
             f"{BASE_URL}/play/{episode_info.anime_id}/{episode_info.session}",
             headers={
                 "Cookie": the_cookie(),
             },
-        )
+        ),
+    )
 
-        if response.status_code == 403:
-            page_try += 1
-            Console.log_dim(
-                f"Got 403 fetching DL servers. Retrying... (Attempt {page_try})",
-                return_line=True,
-            )
-            time.sleep(0.3 + 0.2 * page_try)
-            continue
-
-        if not response.ok:
-            Console.log_dim("Couldn't fetch anime player page")
-            return None
+    if not response:
+        return None
 
     page_html = response.text
 
@@ -157,7 +146,7 @@ def get_anime_episode_download_server_list(
         "html.parser",
     )
 
-    elements = page_el.select("#resolutionMenu button[data-src]")
+    elements = page_el.select("#pickDownload .dropdown-item")
 
     def fix_url(url: Union[str, None]) -> Union[str, None]:
         if not url:
@@ -173,15 +162,19 @@ def get_anime_episode_download_server_list(
 
         return None
 
+    resolution_regex = re.compile(r"(?:\W|^)(\d+)p(?:\W|$)")
     ret: list[DownloadSite] = []
     for element in elements:
-        embed_url = fix_url(element.attrs.get("data-src"))
+        embed_url = fix_url(element.attrs.get("href"))
         if not embed_url:
             continue
 
         site_name = next(element.stripped_strings)
         audio = str(element.attrs.get("data-audio", "jpn"))
-        resolution = int(element.attrs.get("data-resolution", 0))
+        resolution = 0
+        resolution_match = resolution_regex.search(site_name)
+        if resolution_match:
+            resolution = int(resolution_match.group(1))
 
         ret.append(
             DownloadSite(
@@ -202,30 +195,16 @@ def get_anime_session_id(anime_name: str) -> str | None:
     if not re.compile(r"^\d+$").match(anime_name):
         return anime_name
 
-    response: requests.Response | None = None
-    page_try = 0
-    while not response:
-        Console.log_dim("Fetching anime page...", return_line=True)
-        response = create_scraper().get(
+    response = retried_download(
+        name="anime page",
+        do_request=lambda: create_scraper().get(
             f"{BASE_URL}/a/{anime_name}",
             allow_redirects=True,
             headers={
                 "cookie": the_cookie(),
             },
-        )
-
-        if response.status_code == 403:
-            page_try += 1
-            Console.log_dim(
-                f"Got 403 fetching anime page. Retrying... (Attempt {page_try})",
-                return_line=True,
-            )
-            time.sleep(0.3 + 0.2 * page_try)
-            continue
-
-        if not response.ok:
-            Console.log_dim("Couldn't fetch anime page")
-            return None
+        ),
+    )
 
     page_html = response.text
 

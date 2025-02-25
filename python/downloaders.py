@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 import tempfile
-import time
 import urllib.parse
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -23,6 +22,7 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 from python.helpers.deobfuscator import DefaultPlayerDeobfuscator
+from python.helpers.retried_download import retried_download
 from python.log.console import Console
 
 try:
@@ -442,7 +442,7 @@ def handle__vidplay_xyz(url: str) -> HandlerFuncReturn:
                         *[
                             [
                                 f"-metadata:s:s:{i}",
-                                f"language=\"{sub['lang']}\"",
+                                f'language="{sub["lang"]}"',
                             ]
                             for i, sub in enumerate(subtitles)
                         ]
@@ -558,32 +558,19 @@ def handle__filemoon_sx(url: str) -> HandlerFuncReturn:
 
 
 def handle__pahe_win(url: str, referer: str) -> HandlerFuncReturn:
-    page_try = 0
-    response: requests.Response | None = None
-    while not response:
-        response = cloudscraper.create_scraper().get(
+    response = retried_download(
+        "pahe.win page",
+        lambda: cloudscraper.create_scraper().get(
             url,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={
                 "referer": referer,
             },
-        )
+        ),
+    )
 
-        if page_try > 20:
-            return None
-
-        if response.status_code == 403:
-            page_try += 1
-            Console.log_dim(
-                f"Got 403 fetching page.win page. Retrying... (Attempt {page_try})",
-                return_line=True,
-            )
-            time.sleep(0.3 + 0.2 * page_try)
-            continue
-
-        if not response.ok:
-            Console.log_dim("Couldn't fetch page.win page")
-            return None
+    if not response:
+        return None
 
     page_html = response.text
     script_tag = BeautifulSoup(page_html, "html.parser").find(
@@ -612,34 +599,20 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
     scraper = cloudscraper.create_scraper()
 
     def handle_embed(url: str):
-        page_try = 0
-        response: requests.Response | None = None
-        while not response:
-            Console.log_dim("Fetching kwik.si embed page...", return_line=True)
-            response = cloudscraper.create_scraper().get(
+        response = retried_download(
+            "kwik.si embed page",
+            lambda: scraper.get(
                 url,
                 timeout=REQUEST_TIMEOUT_SECONDS,
                 headers={
                     "referer": referer,
                 },
-            )
+            ),
+            max_tries=20,
+        )
 
-            if page_try > 20:
-                Console.log_dim("Giving up on kwik.si embed page after 20 tries")
-                return None
-
-            if response.status_code == 403:
-                page_try += 1
-                Console.log_dim(
-                    f"Got 403 fetching kwik.si embed page. Retrying... (Attempt {page_try})",
-                    return_line=True,
-                )
-                time.sleep(0.3 + 0.2 * page_try)
-                continue
-
-            if not response.ok:
-                Console.log_dim("Couldn't fetch page.win page")
-                return None
+        if not response:
+            return None
 
         page_html = response.text
 
@@ -671,34 +644,20 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
         return source
 
     def handle_info(url: str):
-        page_try = 0
-        response: requests.Response | None = None
-        while not response:
-            Console.log_dim("Fetching kwik.si info page...", return_line=True)
-            response = cloudscraper.create_scraper().get(
+        response = retried_download(
+            "kwik.si info page",
+            lambda: scraper.get(
                 url,
                 timeout=REQUEST_TIMEOUT_SECONDS,
                 headers={
                     "referer": referer,
                 },
-            )
+            ),
+            max_tries=20,
+        )
 
-            if page_try > 20:
-                Console.log_dim("Giving up on kwik.si info page after 20 tries")
-                return None
-
-            if response.status_code == 403:
-                page_try += 1
-                Console.log_dim(
-                    f"Got 403 fetching kwik.si info page. Retrying... (Attempt {page_try})",
-                    return_line=True,
-                )
-                time.sleep(0.3 + 0.2 * page_try)
-                continue
-
-            if not response.ok:
-                Console.log_dim("Couldn't fetch kwik.si page")
-                return None
+        if not response:
+            return None
 
         page_html = response.text
         script_with_src = BeautifulSoup(page_html, "html.parser").find(
@@ -767,7 +726,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
                 headers={
                     "content-type": "application/x-www-form-urlencoded",
                     "referer": url,
-                    "origin": parsed_url.netloc,
+                    "origin": f"{parsed_url.scheme}://{parsed_url.netloc}",
                 },
                 allow_redirects=False,
             )
@@ -775,7 +734,7 @@ def handle__kwik_si(url: str, referer: str) -> HandlerFuncReturn:
             Console.log_dim(f"Got exception while downloading: {e}")
             return None
 
-        redirect_url = download_resp.headers["location"]
+        redirect_url = download_resp.headers.get("location")
         if not redirect_url:
             Console.log_dim("Couldn't find redirect url for kwik.si download thing")
             return None
@@ -1463,7 +1422,7 @@ def handle__megacloud_tv(url: str, referer: str) -> HandlerFuncReturn:
                     *[
                         [
                             f"-metadata:s:s:{i}",
-                            f"language=\"{sub['lang']}\"",
+                            f'language="{sub["lang"]}"',
                         ]
                         for i, sub in enumerate(subtitles)
                     ]
@@ -1601,7 +1560,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
             const CryptoJS = require('./crypto');
 
             const key = {json.dumps(key)};
-            const sources = {json.dumps(page_json.get('sources'))};
+            const sources = {json.dumps(page_json.get("sources"))};
 
             process.stdout.write(
                 CryptoJS.AES.decrypt(sources, key).toString(CryptoJS.enc.Utf8),
@@ -1737,7 +1696,7 @@ def handle__rapid_cloud_co(url: str, referer: str) -> HandlerFuncReturn:
                             # f"-metadata:s:s:{i}", f"name='{sub['lang']}'",
                             # f"-metadata:s:s:{i}", f"language='{re.search(r'^([a-zA-Z]+)', os.path.basename(urlparse(sub['url']).path)).group(1)}'",
                             f"-metadata:s:s:{i}",
-                            f"language=\"{sub['lang']}\"",
+                            f'language="{sub["lang"]}"',
                         ]
                         for i, sub in enumerate(subtitles)
                     ]

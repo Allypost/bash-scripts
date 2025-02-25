@@ -1,12 +1,13 @@
-import traceback
-from dataclasses import dataclass, field
 import datetime
-from enum import StrEnum, auto
-from itertools import chain
 import re
 import subprocess
+import traceback
+from dataclasses import dataclass, field
+from enum import StrEnum, auto
+from itertools import chain
 from typing import Callable, TypeVar
 from urllib.parse import urlparse
+
 from python.downloaders import DownloadInfo, get_download_info
 from python.helpers.list import flatten
 from python.helpers.size import human_byte_size
