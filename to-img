@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+function main {
+  if [ $# -lt 1 ]; then
+    usage
+    exit 1
+  fi
+
+  while [ $# -gt 0 ]; do
+    local vid_path="$1"
+    shift
+    local vid_name="$(basename "$vid_path")"
+    local vid_name="${vid_name%.*}"
+    local vid_dir="$(dirname "$vid_path")"
+    local img_path="$vid_dir/$vid_name.jpeg"
+
+    ffmpeg -i "$vid_path" -vframes 1 "$img_path"
+    touch -r "$vid_path" "$img_path"
+    if command -v trash-put &>/dev/null; then
+      trash-put "$vid_path"
+    fi
+  done
+}
+
+function usage {
+  echo "Usage: $0 <video-file> [...<video-file>]"
+}
+
+main "$@"
