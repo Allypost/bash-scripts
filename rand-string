@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+function main() {
+  local POSITIONAL_ARGS=()
+  local n_chars=32
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    -h | --help)
+      print-usage
+      exit 0
+      ;;
+    -n | --num)
+      require-named-arg "$@"
+      n_chars="$2"
+      shift
+      shift
+      ;;
+    -*)
+      print-error "Error: Unknown option: $1"
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+    esac
+  done
+
+  local first_arg="${POSITIONAL_ARGS[0]:-}"
+
+  if [ -n "$first_arg" ]; then
+    n_chars="$first_arg"
+  fi
+
+  n_chars="${n_chars^^}"
+
+  if [[ "$n_chars" =~ ^[1-9][0-9]*[KMGT]?$ ]]; then
+    rand-str "$n_chars"
+  else
+    print-error "Error: number argument must be a positive integer with optional suffix (eg. 12, 64, 8K, 1M...)"
+  fi
+
+}
+
+function require-named-arg() {
+  if [ -z "$2" ]; then
+    print-error "Error: Argument for $1 is missing" >&2
+  fi
+}
+
+function rand-str() {
+  openssl rand -base64 "$1" | xargs printf "%s" | head -c "$1"
+}
+
+function print-error() {
+  echo "$1" >&2
+  echo "" >&2
+  print-usage >&2
+  exit 1
+}
+
+function print-usage() {
+  local script_name
+  script_name="$(basename "$0")"
+
+  echo "Usage: $script_name [...options] [NUM_CHARS]"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help  Display this help message."
+  echo "  -n, --num   Number of characters to generate."
+  echo "              Default: 32"
+  echo ""
+  echo "Examples:"
+  echo "  $script_name 16"
+  echo "  $script_name -n 8 16 # outputs 16 random characters"
+  echo "  $script_name -n 32 | xclip -sel clip"
+}
+
+main "$@"
