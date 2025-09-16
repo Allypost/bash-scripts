@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+function main {
+  local BRANCH_NAME="${1:-}"
+
+  if [ -z "$BRANCH_NAME" ]; then
+    print-usage
+    exit 1
+  fi
+
+  if [ "$BRANCH_NAME" = "-h" ] || [ "$BRANCH_NAME" = "--help" ]; then
+    print-usage
+    exit 0
+  fi
+
+  local git_dir
+  if [ -d ".git" ]; then
+    git_dir="$(pwd)"
+  else
+    git_dir="$(dirname "$(ls -d ./*/.git/)" | head -n1)"
+  fi
+
+  if [ -z "$git_dir" ]; then
+    echo "No git directory found in current or sub-directories"
+    echo "Please run this script from a git directory or directly above one"
+    exit 1
+  fi
+
+  local create_dir
+  create_dir="$(realpath "$git_dir/..")/$BRANCH_NAME"
+
+  echo "Creating new git workdir in $create_dir"
+
+  mkdir -p "$create_dir"
+
+  cd "$git_dir"
+
+  if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
+    echo "Branch '$BRANCH_NAME' already exists"
+  else
+    echo "Creating branch '$BRANCH_NAME'"
+    git branch "$BRANCH_NAME"
+  fi
+
+  git worktree add "$create_dir" "$BRANCH_NAME"
+
+  echo "Workdir created"
+  echo "cd $create_dir"
+}
+
+function print-usage {
+  local script_name
+  script_name="$(basename "$0")"
+
+  printf "%s - Create a git workdir, but simpler\n" "$script_name"
+  echo "Usage:"
+  printf "  %s <branch-name>\n" "$script_name"
+}
+
+set -euo pipefail
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+main "$@"
