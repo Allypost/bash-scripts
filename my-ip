@@ -5,6 +5,7 @@ function fetch {
 }
 
 URLS=(
+    'https://ip.allypost.net/'
     'https://ip.kset.org/'
     'https://checkip.amazonaws.com/'
     'http://icanhazip.com/'
