@@ -45,7 +45,14 @@ function main {
   git worktree add "$create_dir" "$BRANCH_NAME"
 
   echo "Workdir created"
-  echo "cd $create_dir"
+
+  echo "Adding upstream remote if applicable"
+  cd "$create_dir"
+  git fetch --all
+  git branch --set-upstream-to=origin/"$BRANCH_NAME" "$BRANCH_NAME" &>/dev/null && echo "Upstream remote set" || echo "Upstream remote seemingly does not exist"
+
+  echo "To switch to this workdir, run:"
+  echo "  cd $create_dir"
 }
 
 function print-usage {
