@@ -1,53 +1,95 @@
 #!/usr/bin/env bash
 
-set -exo pipefail
+set -euo pipefail
 
-SCRCPY_PID=
-FFMPEG_PID=
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+scrcpy_pid=""
+
+function echo-billboard {
+  local text="$1"
+  local text_length="${#text}"
+  # add extra 4 characters because of text additions
+  text_length="$((text_length + 4))"
+
+  local line="$(printf "%${text_length}s" "" | tr " " "=")"
+
+  echo
+  echo "$line"
+  echo "= $text ="
+  echo "$line"
+  echo
+}
 
 function cleanup {
-  if [ -n "$SCRCPY_PID" ]; then
-    kill "$SCRCPY_PID" || true
+  echo-billboard "Phone webcam shutting down"
+
+  if [ -n "$scrcpy_pid" ]; then
+    echo "Stopping scrpy..."
+    kill "$scrcpy_pid"
+    wait -f "$scrcpy_pid" >/dev/null 2>&1 || true
+    scrcpy_pid=""
+    echo "scrpy stopped"
   fi
 
-  if [ -n "$FFMPEG_PID" ]; then
-    kill "$FFMPEG_PID" || true
-  fi
+  echo "Removing v4l2loopback module..."
+  doas modprobe --verbose --remove --wait 6000 v4l2loopback
+  echo "v4l2loopback module removed"
 
   exit 0
 }
 
 # call cleanup when script exits or on SIGINT/SIGTERM/SIGHUP
-trap cleanup EXIT 1 2 3 6 15
+trap cleanup EXIT
 
-adb wait-for-device
+function main {
+  # Wait for ADB device (phone) to connect
+  adb wait-for-device
 
-doas modprobe -r v4l2loopback
+  # Unload current v4l2loopback module
+  doas modprobe --verbose --remove --wait=2000 v4l2loopback
 
-doas modprobe v4l2loopback devices=2 video_nr=9 exclusive_caps=1,1 card_label="Phone-Cam-Raw,Phone-Cam"
+  # Insert v4l2loopback module with correct options
+  doas modprobe --verbose v4l2loopback exclusive_caps=1 card_label="Phone Webcam"
+  # doas modprobe --verbose v4l2loopback card_label="Phone Webcam"
 
-v4l2_devices=()
-while IFS= read -r line; do
-  line="${line#"${line%%[![:space:]]*}"}"
-  v4l2_devices+=("$line")
-done < <(v4l2-ctl --list-devices | grep '/dev/video')
+  sleep 0.5
 
-if [ "${#v4l2_devices}" -lt 2 ]; then
-  echo "Not enough v4l2 devices found: ${v4l2_devices[*]}"
-  exit 1
-fi
+  # Get the first v4l2 device
+  v4l2_device="$(v4l2-ctl --list-devices | grep /dev/video | awk '{print $1}' | head -n1)"
 
-v4l2_raw="${v4l2_devices[0]}"
-v4l2_out="${v4l2_devices[1]}"
+  if [ -z "$v4l2_device" ]; then
+    echo "No v4l2 devices found!"
+    exit 1
+  fi
 
-scrcpy --video-source=camera --v4l2-sink="$v4l2_raw" --no-audio &
+  echo "Using v4l2 device: $v4l2_device"
 
-SCRCPY_PID=$!
+  # List available camera resolutions and fps:
+  # scrcpy --list-camera-sizes
 
-sleep 2
+  # Stream phone camera to v4l2 device via scrcpy
+  scrcpy \
+    --video-source=camera \
+    --camera-facing=back \
+    --camera-ar=sensor \
+    --max-size=1440 \
+    --video-bit-rate=8M \
+    --capture-orientation=@flip0 \
+    --orientation=flip0 \
+    --no-playback \
+    --no-audio \
+    --no-window \
+    --v4l2-sink="$v4l2_device" \
+    &
 
-doas ffmpeg -f v4l2 -i "$v4l2_raw" -vf transpose=1 -f v4l2 "$v4l2_out" &
+  scrcpy_pid="$!"
 
-FFMPEG_PID=$!
+  echo-billboard "Phone webcam ready"
 
-wait "$SCRCPY_PID"
+  wait "$scrcpy_pid"
+}
+
+main "$@"
