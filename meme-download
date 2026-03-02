@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
 
-MEME_DIR="$HOME/MEMES"
-FILE_IDENTIFIER="$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev)"
-OUTPUT_TEMPLATE="$MEME_DIR/$FILE_IDENTIFIER.%(id)s.%(ext)s"
-if [ -z "$1" ]; then
-  URL="$(
-    echo "" |
-      rofi \
-        -dmenu \
-        -theme-str '
+if [ -n "$DEBUG" ]; then
+  set -x
+fi
+
+function main {
+  MEME_DIR="$HOME/MEMES"
+  if [ ! -d "$MEME_DIR" ]; then
+    send-notification
+    normal \
+      5000 \
+      error \
+      'Download failed' \
+      "The download directory \"$MEME_DIR\" doesn't exist"
+  fi
+  FILE_IDENTIFIER="$(date -u '+%s%N' | base64 | rev | cut -c 3- | rev)"
+  OUTPUT_TEMPLATE="$MEME_DIR/$FILE_IDENTIFIER.%(id)s.%(ext)s"
+  if [ -z "$1" ]; then
+    URL="$(
+      echo "" |
+        rofi \
+          -dmenu \
+          -theme-str '
           window {
             font: "mononoki 10";
             padding: 0;
@@ -22,18 +35,113 @@ if [ -z "$1" ]; then
             children: [entry];
           }
         ' \
-        -m \
-        -4 \
-        -p \
-        ''
-  )"
-else
-  URL="$1"
-fi
-TMP_FILE="/tmp/$(basename "$0")_"
-TMP_FILE_LENGTH="${#TMP_FILE}"
-TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
-USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
+          -m \
+          -4 \
+          -p \
+          ''
+    )"
+  else
+    URL="$1"
+  fi
+  TMP_FILE="/tmp/$(basename "$0")_"
+  TMP_FILE_LENGTH="${#TMP_FILE}"
+  TMP_FILE="$TMP_FILE$(printf '%q' "$URL" | sed -e 's|/|^|gi' | cut -c -$((255 - TMP_FILE_LENGTH))))"
+  USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
+
+  if [[ -z "$URL" ]]; then
+    exit 0
+  fi
+
+  (
+    IS_DEBUG="0"
+    case $- in
+    *x*) IS_DEBUG="1" ;;
+    esac
+
+    set +x
+    [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
+    if [ "$IS_DEBUG" -eq "1" ]; then
+      set -x
+    fi
+
+    mkdir -p "$MEME_DIR"
+    cd "$MEME_DIR" || exit 1
+
+    if command -v downloader-cli &>/dev/null; then
+      send-notification \
+        low \
+        2000 \
+        info \
+        'Downloading meme' \
+        "Downloading meme from $URL"
+
+      if downloader-cli "$URL" &>"$TMP_FILE"; then
+        send-notification \
+          low \
+          2000 \
+          success \
+          'Download finished' \
+          "The MEME from $URL has finished downloading"
+      else
+        send-notification \
+          normal \
+          5000 \
+          error \
+          'Download failed' \
+          "The meme downloader couldn't download the provided page"
+      fi
+
+      exit 0
+    fi
+
+    yt-dlp \
+      --no-check-certificate \
+      --socket-timeout 120 \
+      -o "$OUTPUT_TEMPLATE" \
+      --user-agent "$USER_AGENT" \
+      --exec 'touch {} && memfix {}' \
+      "$URL"
+
+    FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
+
+    if [[ $? -eq 0 && -n "$FILE_EXISTS" ]]; then
+      filename=$(basename -- "$FILE_EXISTS")
+      extension="${filename##*.}"
+      filename="${filename%.*}"
+
+      if [ "$extension" = 'unknown_video' ]; then
+        proper_extension="$(file --extension "$FILE_EXISTS" | rev | cut -d':' -f1 | rev | cut -d'/' -f1 | awk '{$1=$1};1')"
+        mv "$FILE_EXISTS" "$MEME_DIR/$filename.$proper_extension"
+      fi
+
+      echo "Downloaded"
+    elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
+      for MEDIA_URL in $(get-instagram-media-urls "$URL"); do
+        . $0 "$MEDIA_URL"
+      done
+      exit 0
+    elif [[ "$URL" =~ https\:\/\/(www\.)?twitter\.com\/[^/]+/status/[0-9]+ ]]; then
+      . $0 "$(get-twitter-screenshot "$URL")"
+      exit 0
+    else
+      send-notification \
+        normal \
+        5000 \
+        error \
+        'Download failed' \
+        "The meme downloader couldn't download the provided page"
+
+      exit 1
+    fi
+
+    send-notification \
+      low \
+      2000 \
+      success \
+      'Download finished' \
+      "The MEME from $URL has finished downloading"
+  ) 2>&1 | tee "$TMP_FILE"
+}
 
 function send-notification {
   urgency="$1"
@@ -57,93 +165,4 @@ function send-notification {
     "$message"
 }
 
-if [[ -z "$URL" ]]; then
-  exit 0
-fi
-
-if command -v downloader-cli &>/dev/null; then
-  send-notification \
-    low \
-    2000 \
-    info \
-    'Downloading meme' \
-    "Downloading meme from $URL"
-
-  cd "$MEME_DIR" || exit 1
-
-  if downloader-cli "$URL" &>"$TMP_FILE"; then
-    send-notification \
-      low \
-      2000 \
-      success \
-      'Download finished' \
-      "The MEME from $URL has finished downloading"
-  else
-    send-notification \
-      normal \
-      5000 \
-      error \
-      'Download failed' \
-      "The meme downloader couldn't download the provided page"
-  fi
-  exit 0
-fi
-
-if command -v meme-downloader &>/dev/null; then
-  meme-downloader "$URL"
-  exit 0
-fi
-
-(
-  [[ -f "$HOME/.profile" ]] && source "$HOME/.profile"
-
-  mkdir -p "$MEME_DIR"
-  cd "$MEME_DIR" || exit
-
-  yt-dlp \
-    --no-check-certificate \
-    --socket-timeout 120 \
-    -o "$OUTPUT_TEMPLATE" \
-    --user-agent "$USER_AGENT" \
-    --exec 'touch {} && memfix {}' \
-    "$URL"
-
-  FILE_EXISTS="$(find . -name "$FILE_IDENTIFIER.*")"
-
-  if [[ $? -eq 0 && -n "$FILE_EXISTS" ]]; then
-    filename=$(basename -- "$FILE_EXISTS")
-    extension="${filename##*.}"
-    filename="${filename%.*}"
-
-    if [ "$extension" = 'unknown_video' ]; then
-      proper_extension="$(file --extension "$FILE_EXISTS" | rev | cut -d':' -f1 | rev | cut -d'/' -f1 | awk '{$1=$1};1')"
-      mv "$FILE_EXISTS" "$MEME_DIR/$filename.$proper_extension"
-    fi
-
-    echo "Downloaded"
-  elif [[ "$URL" =~ https\:\/\/(www\.)?instagram\.com\/p\/.* ]]; then
-    for MEDIA_URL in $(get-instagram-media-urls "$URL"); do
-      . $0 "$MEDIA_URL"
-    done
-    exit 0
-  elif [[ "$URL" =~ https\:\/\/(www\.)?twitter\.com\/[^/]+/status/[0-9]+ ]]; then
-    . $0 "$(get-twitter-screenshot "$URL")"
-    exit 0
-  else
-    send-notification \
-      normal \
-      5000 \
-      error \
-      'Download failed' \
-      "The meme downloader couldn't download the provided page"
-
-    exit 1
-  fi
-
-  send-notification \
-    low \
-    2000 \
-    success \
-    'Download finished' \
-    "The MEME from $URL has finished downloading"
-) &>"$TMP_FILE"
+main "$@"
