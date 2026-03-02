@@ -15,7 +15,7 @@ outname="$(dirname "$1")/$base.s.mp4"
 ffmpeg \
 	-i "$1" \
 	-max_muxing_queue_size 1024 \
-	-c:v libx264 -crf 29 \
+	-c:v libx264 -crf 26 \
 	-af channelmap=0 -b:a 192k \
 	-vf "scale=-2:480" -preset slow -movflags faststart \
 	-map_metadata -1 \
