@@ -12,7 +12,7 @@ fi
 set -euo pipefail
 
 function log() {
-	printf "${F_DIM}[%s]${NO_FORMAT} $1${NO_FORMAT}\n" "$(date +'%Y-%m-%d %H:%M:%S.%3N')" ${@:2}
+	printf "${F_DIM}[%s]${NO_FORMAT} $1${NO_FORMAT}\n" "$(date +'%Y-%m-%d %H:%M:%S.%3N')" "${@:2}"
 }
 
 function info() {
@@ -80,7 +80,18 @@ function main() {
 	ffmpeg_cmd+=(-map '[outv]' -map '[outa]' -preset 'slow')
 	ffmpeg_cmd+=("$file_out")
 
+	printf '%q\n' "${ffmpeg_cmd[@]}"
+
+	declare -a file_times
+	for f in "$@"; do
+		file_times+=("$(stat -c '%Y' "$f")")
+	done
+	max_time="$(printf '%s\n' "${file_times[@]}" | sort -n | tail -1)"
+	# add one second to the max time
+	max_time="$((max_time + 1))"
+
 	"${ffmpeg_cmd[@]}"
+	touch -d "@$max_time" "$file_out"
 }
 
 main "$@"
