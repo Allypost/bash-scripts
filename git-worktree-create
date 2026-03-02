@@ -33,7 +33,7 @@ function main {
 
   mkdir -p "$create_dir"
 
-  cd "$git_dir"
+  cd "$git_dir" || fail "Could not cd to $create_dir"
 
   if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
     echo "Branch '$BRANCH_NAME' already exists"
@@ -47,12 +47,34 @@ function main {
   echo "Workdir created"
 
   echo "Adding upstream remote if applicable"
-  cd "$create_dir"
-  git fetch --all
-  git branch --set-upstream-to=origin/"$BRANCH_NAME" "$BRANCH_NAME" &>/dev/null && echo "Upstream remote set" || echo "Upstream remote seemingly does not exist"
+  cd "$create_dir" || fail "Could not cd to $create_dir"
+  setup-upstream-remote "$BRANCH_NAME"
 
   echo "To switch to this workdir, run:"
-  echo "  cd $create_dir"
+  echo "  cd $(realpath --relative-to="$PWD" "$create_dir")"
+}
+
+function setup-upstream-remote {
+  local BRANCH_NAME="${1}"
+
+  git fetch --all
+
+  git branch --set-upstream-to=origin/"$BRANCH_NAME" "$BRANCH_NAME" &>/dev/null
+  local result="$?"
+
+  if [ "$result" -ne 0 ]; then
+    echo "Upstream remote seemingly does not exist"
+    return
+  fi
+
+  echo "Upstream remote set, pulling commits"
+  git pull
+  echo "Synced with upstream"
+}
+
+function fail {
+  echo "Error: $*" >&2
+  exit 1
 }
 
 function print-usage {
@@ -64,7 +86,7 @@ function print-usage {
   printf "  %s <branch-name>\n" "$script_name"
 }
 
-set -euo pipefail
+set -uo pipefail
 if [ -n "${DEBUG:-}" ]; then
   set -x
 fi
