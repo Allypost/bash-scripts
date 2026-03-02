@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+declare -a KILL_PIDS
+declare -a WAIT_PIDS
+IS_WAYLAND=0
+IS_HYPRLAND=0
+
+function main() {
+  deduce-runtime
+
+  if [ "$IS_HYPRLAND" -eq 1 ]; then
+    # Freeze screens until screen is captured
+    hyprpicker --render-inactive --no-zoom &
+    sleep 0.2
+    local hyprpicker_pid="$!"
+    KILL_PIDS+=("$hyprpicker_pid")
+  fi
+
+  if [ "$IS_WAYLAND" -eq 1 ]; then
+    local geometry="$(slurp -d)"
+    sleep 0.2
+    grim -g "$geometry" - | wl-copy
+  else
+    /usr/bin/flameshot gui
+  fi
+}
+
+function deduce-runtime() {
+  if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+    IS_WAYLAND=1
+
+    if [ -n "$(printenv HYPRLAND_INSTANCE_SIGNATURE || true)" ]; then
+      IS_HYPRLAND=1
+    fi
+  fi
+}
+
+trap cleanup EXIT
+
+function cleanup() {
+  for pid in "${KILL_PIDS[@]}"; do
+    kill "$pid" || continue
+    wait -f "$pid" >/dev/null 2>&1 || true
+  done
+
+  for pid in "${WAIT_PIDS[@]}"; do
+    wait -f "$pid" >/dev/null 2>&1 || true
+  done
+
+  exit 0
+}
+
+main "$@"

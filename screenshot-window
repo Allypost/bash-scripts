@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+IS_WAYLAND=0
+if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+  IS_WAYLAND=1
+fi
+
 SELECT_WINDOW=1
 
 SKIP_ARGS="0"
@@ -17,27 +28,81 @@ while getopts c option; do
 done
 shift $SKIP_ARGS
 
-if [ "$SELECT_WINDOW" -eq 1 ]; then
-  WINDOW_ID="$(xdotool selectwindow)"
-else
-  WINDOW_ID="$(xdotool getactivewindow)"
-fi
-
 function take-screenshot() {
-  maim \
-    --window "$WINDOW_ID" \
-    --format png \
-    --quality 10 \
-    --hidecursor |
-#    convert - \( +clone -background black -shadow 57x15+0+13 \) +swap -background none -layers merge +repage - |
-    xclip \
-      -selection clipboard \
-      -t image/png
+  if [ "$IS_WAYLAND" -eq 1 ]; then
+    cmd_failures=''
+    for cmd in hyprctl jq slurp awk wl-copy; do
+      command -v "${cmd}" >/dev/null 2>&1 || cmd_failures="${cmd_failures},${cmd}"
+    done
+
+    if (("${#cmd_failures}" > 0)); then
+      printf -- '%s\n' "The following dependencies are missing: ${cmd_failures/,/}" >&2
+      exit 1
+    fi
+
+    if [ "$SELECT_WINDOW" -eq 1 ]; then
+      # Get all active/visible workspaces
+      ACTIVE_WORKSPACES="$(hyprctl monitors all -j | jq -c '. | map(.activeWorkspace.id)')"
+
+      # Get all clients and selection (point) region via slurp
+      TREE=$(hyprctl clients -j | jq --argjson 'active' "$ACTIVE_WORKSPACES" -r '.[] | select(.hidden==false and .mapped==true and IN($active[]; .workspace.id))')
+      SELECTION=$(echo "$TREE" | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' | slurp -r)
+
+      # Get individual coordinates
+      X=$(echo "$SELECTION" | awk -F'[, x]' '{print $1}')
+      Y=$(echo "$SELECTION" | awk -F'[, x]' '{print $2}')
+      W=$(echo "$SELECTION" | awk -F'[, x]' '{print $3}')
+      H=$(echo "$SELECTION" | awk -F'[, x]' '{print $4}')
+
+      TARGET_WINDOW="$(
+        echo "$TREE" |
+          jq -r --argjson x "$X" --argjson y "$Y" --argjson w "$W" --argjson h "$H" '. | select(.at[0]==$x and .at[1]==$y and .size[0]==$w and.size[1]==$h)'
+      )"
+    else
+      TARGET_WINDOW="$(hyprctl activewindow -j)"
+    fi
+
+    TARGET_GEOMETRY="$(echo "$TARGET_WINDOW" | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')"
+    TARGET_WINDOW_NAME="$(echo "$TARGET_WINDOW" | jq -r '.title')"
+
+    grim -g "$TARGET_GEOMETRY" - | wl-copy
+
+    echo "$TARGET_WINDOW_NAME"
+  else
+    cmd_failures=''
+    for cmd in xdotool maim xclip; do
+      command -v "${cmd}" >/dev/null 2>&1 || cmd_failures="${cmd_failures},${cmd}"
+    done
+
+    if (("${#cmd_failures}" > 0)); then
+      printf -- '%s\n' "The following dependencies are missing: ${cmd_failures/,/}" >&2
+      exit 1
+    fi
+
+    if [ "$SELECT_WINDOW" -eq 1 ]; then
+      WINDOW_ID="$(xdotool selectwindow)"
+    else
+      WINDOW_ID="$(xdotool getactivewindow)"
+    fi
+
+    maim \
+      --window "$WINDOW_ID" \
+      --format png \
+      --quality 10 \
+      --hidecursor |
+      #    convert - \( +clone -background black -shadow 57x15+0+13 \) +swap -background none -layers merge +repage - |
+      xclip \
+        -selection clipboard \
+        -t image/png &>/dev/null
+
+    xdotool getwindowname "$WINDOW_ID"
+  fi
 }
 
-take-screenshot &&
-  notify-send \
-    'Window Screenshot' \
-    "<b>Captured screenshot:</b>\n<i>$(xdotool getwindowname "$WINDOW_ID")</i>" \
-    -i showfoto \
-    --app-name Screenshot
+WINDOW_NAME="$(take-screenshot)"
+
+notify-send \
+  'Window Screenshot' \
+  "<b>Captured screenshot:</b>\n<i>$WINDOW_NAME</i>" \
+  -i showfoto \
+  --app-name Screenshot
