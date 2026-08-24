@@ -21,7 +21,7 @@ function main {
     local img_path="$vid_dir/$vid_name.jpeg"
 
     ffmpeg -i "$vid_path" -vframes 1 "$img_path"
-    touch -r "$vid_path" "$img_path"
+    touch -r "$vid_path" "$img_path" || echo "Failed to change file times"
     if command -v trash-put &>/dev/null; then
       trash-put "$vid_path"
     fi
