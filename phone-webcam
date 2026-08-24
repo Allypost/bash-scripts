@@ -75,6 +75,7 @@ function main {
     --video-source=camera \
     --camera-facing=back \
     --camera-ar=sensor \
+    --camera-torch \
     --max-size=1440 \
     --video-bit-rate=8M \
     --capture-orientation=@flip0 \
