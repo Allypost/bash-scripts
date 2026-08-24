@@ -5,6 +5,7 @@ set -euo pipefail
 function main() {
   local POSITIONAL_ARGS=()
   local n_chars=32
+  local special_chars=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
     -h | --help)
@@ -15,6 +16,10 @@ function main() {
       require-named-arg "$@"
       n_chars="$2"
       shift
+      shift
+      ;;
+    -s | --special)
+      special_chars=1
       shift
       ;;
     -*)
@@ -36,11 +41,10 @@ function main() {
   n_chars="${n_chars^^}"
 
   if [[ "$n_chars" =~ ^[1-9][0-9]*[KMGT]?$ ]]; then
-    rand-str "$n_chars"
+    rand-str "$n_chars" "$special_chars" || true
   else
     print-error "Error: number argument must be a positive integer with optional suffix (eg. 12, 64, 8K, 1M...)"
   fi
-
 }
 
 function require-named-arg() {
@@ -50,7 +54,11 @@ function require-named-arg() {
 }
 
 function rand-str() {
-  openssl rand -base64 "$1" | xargs printf "%s" | head -c "$1"
+  if [ "${2:-}" -gt 0 ]; then
+    openssl rand -base64 "$1" | xargs printf "%s" | head -c "$1"
+  else
+    LC_ALL=POSIX tr -dc '[:alnum:]' </dev/urandom | head -c "$1"
+  fi
 }
 
 function print-error() {
@@ -67,9 +75,10 @@ function print-usage() {
   echo "Usage: $script_name [...options] [NUM_CHARS]"
   echo ""
   echo "Options:"
-  echo "  -h, --help  Display this help message."
-  echo "  -n, --num   Number of characters to generate."
-  echo "              Default: 32"
+  echo "  -h, --help     Display this help message."
+  echo "  -n, --num      Number of characters to generate."
+  echo "                 Default: 32"
+  echo "  -s, --special  Allow special characters in the output."
   echo ""
   echo "Examples:"
   echo "  $script_name 16"
