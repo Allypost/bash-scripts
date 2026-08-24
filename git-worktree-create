@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 function main {
+  local initial_dir="$PWD"
   local BRANCH_NAME="${1:-}"
 
   if [ -z "$BRANCH_NAME" ]; then
@@ -51,7 +52,7 @@ function main {
   setup-upstream-remote "$BRANCH_NAME"
 
   echo "To switch to this workdir, run:"
-  echo "  cd $(realpath --relative-to="$PWD" "$create_dir")"
+  echo "  cd $(realpath --relative-to="$initial_dir" "$create_dir")"
 }
 
 function setup-upstream-remote {
