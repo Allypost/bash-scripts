@@ -14,6 +14,7 @@ IS_HYPRLAND=0
 function main() {
   deduce-runtime
 
+  POSTPROCESS_CMD="cat"
   if [ "$IS_HYPRLAND" -eq 1 ]; then
     # Freeze screens until screen is captured
     hyprpicker --render-inactive --no-zoom &
@@ -23,9 +24,17 @@ function main() {
   fi
 
   if [ "$IS_WAYLAND" -eq 1 ]; then
+    if command -v satty &>/dev/null; then
+      POSTPROCESS_CMD="satty -f - --fullscreen current-screen --copy-command wl-copy --font-family 'IosevkAllyP' --actions-on-enter 'save-to-clipboard'"
+    elif command -v swappy &>/dev/null; then
+      POSTPROCESS_CMD="swappy -f -"
+    else
+      POSTPROCESS_CMD="wl-copy --type image/png"
+    fi
+
     local geometry="$(slurp -d)"
     sleep 0.2
-    grim -g "$geometry" - | wl-copy
+    grim -g "$geometry" - | eval "$POSTPROCESS_CMD" &
   else
     /usr/bin/flameshot gui
   fi

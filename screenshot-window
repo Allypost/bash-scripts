@@ -65,7 +65,7 @@ function take-screenshot() {
     TARGET_GEOMETRY="$(echo "$TARGET_WINDOW" | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')"
     TARGET_WINDOW_NAME="$(echo "$TARGET_WINDOW" | jq -r '.title')"
 
-    grim -g "$TARGET_GEOMETRY" - | wl-copy
+    grim -g "$TARGET_GEOMETRY" - | wl-copy --type image/png
 
     echo "$TARGET_WINDOW_NAME"
   else
